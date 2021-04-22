@@ -26,20 +26,23 @@ import org.hyperledger.besu.ethereum.core.Hash;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.core.Wei;
 import org.hyperledger.besu.ethereum.core.fees.TransactionGasBudgetCalculator;
-import org.hyperledger.besu.ethereum.vm.TestBlockchain;
-import org.hyperledger.besu.ethereum.vm.WorldStateMock;
+import org.hyperledger.besu.ethereum.referencetests.ReferenceTestBlockchain;
+import org.hyperledger.besu.ethereum.referencetests.ReferenceTestWorldState;
+
+import java.util.Optional;
 
 import org.junit.Test;
 
 public class MainnetBlockProcessorTest {
 
-  private final TransactionProcessor transactionProcessor = mock(TransactionProcessor.class);
+  private final MainnetTransactionProcessor transactionProcessor =
+      mock(MainnetTransactionProcessor.class);
   private final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory =
       mock(AbstractBlockProcessor.TransactionReceiptFactory.class);
 
   @Test
   public void noAccountCreatedWhenBlockRewardIsZeroAndSkipped() {
-    final Blockchain blockchain = new TestBlockchain();
+    final Blockchain blockchain = new ReferenceTestBlockchain();
     final MainnetBlockProcessor blockProcessor =
         new MainnetBlockProcessor(
             transactionProcessor,
@@ -47,9 +50,10 @@ public class MainnetBlockProcessorTest {
             Wei.ZERO,
             BlockHeader::getCoinbase,
             true,
-            TransactionGasBudgetCalculator.frontier());
+            TransactionGasBudgetCalculator.frontier(),
+            Optional.empty());
 
-    final MutableWorldState worldState = WorldStateMock.create(emptyMap());
+    final MutableWorldState worldState = ReferenceTestWorldState.create(emptyMap());
     final Hash initialHash = worldState.rootHash();
 
     final BlockHeader emptyBlockHeader =
@@ -65,7 +69,7 @@ public class MainnetBlockProcessorTest {
 
   @Test
   public void accountCreatedWhenBlockRewardIsZeroAndNotSkipped() {
-    final Blockchain blockchain = new TestBlockchain();
+    final Blockchain blockchain = new ReferenceTestBlockchain();
     final MainnetBlockProcessor blockProcessor =
         new MainnetBlockProcessor(
             transactionProcessor,
@@ -73,9 +77,10 @@ public class MainnetBlockProcessorTest {
             Wei.ZERO,
             BlockHeader::getCoinbase,
             false,
-            TransactionGasBudgetCalculator.frontier());
+            TransactionGasBudgetCalculator.frontier(),
+            Optional.empty());
 
-    final MutableWorldState worldState = WorldStateMock.create(emptyMap());
+    final MutableWorldState worldState = ReferenceTestWorldState.create(emptyMap());
     final Hash initialHash = worldState.rootHash();
 
     final BlockHeader emptyBlockHeader =

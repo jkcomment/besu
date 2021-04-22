@@ -18,7 +18,9 @@ import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static org.hyperledger.besu.consensus.clique.jsonrpc.CliqueRpcApis.CLIQUE;
 import static org.hyperledger.besu.consensus.ibft.jsonrpc.IbftRpcApis.IBFT;
+import static org.hyperledger.besu.consensus.qbft.jsonrpc.QbftRpcApis.QBFT;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis.ADMIN;
+import static org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis.MINER;
 
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApi;
@@ -47,12 +49,20 @@ public class NodeConfigurationFactory {
     return createJsonRpcWithRpcApiEnabledConfig(CLIQUE);
   }
 
-  public JsonRpcConfiguration createJsonRpcWithIbft2EnabledConfig() {
-    return createJsonRpcWithRpcApiEnabledConfig(IBFT);
+  public JsonRpcConfiguration createJsonRpcWithIbft2EnabledConfig(final boolean minerEnabled) {
+    return minerEnabled
+        ? createJsonRpcWithRpcApiEnabledConfig(IBFT, MINER)
+        : createJsonRpcWithRpcApiEnabledConfig(IBFT);
   }
 
   public JsonRpcConfiguration createJsonRpcWithIbft2AdminEnabledConfig() {
     return createJsonRpcWithRpcApiEnabledConfig(IBFT, ADMIN);
+  }
+
+  public JsonRpcConfiguration createJsonRpcWithQbftEnabledConfig(final boolean minerEnabled) {
+    return minerEnabled
+        ? createJsonRpcWithRpcApiEnabledConfig(QBFT, MINER)
+        : createJsonRpcWithRpcApiEnabledConfig(QBFT);
   }
 
   public JsonRpcConfiguration createJsonRpcEnabledConfig() {

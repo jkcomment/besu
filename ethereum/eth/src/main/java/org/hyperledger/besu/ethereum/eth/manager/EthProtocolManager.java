@@ -49,6 +49,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tuweni.bytes.Bytes;
 
 public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
   private static final Logger LOG = LogManager.getLogger();
@@ -139,7 +140,10 @@ public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
         peerValidators,
         fastSyncEnabled,
         scheduler,
-        new ForkIdManager(blockchain, Collections.emptyList()));
+        new ForkIdManager(
+            blockchain,
+            Collections.emptyList(),
+            ethereumWireProtocolConfiguration.isLegacyEth64ForkIdEnabled()));
   }
 
   public EthProtocolManager(
@@ -167,7 +171,8 @@ public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
         peerValidators,
         fastSyncEnabled,
         scheduler,
-        new ForkIdManager(blockchain, forks));
+        new ForkIdManager(
+            blockchain, forks, ethereumWireProtocolConfiguration.isLegacyEth64ForkIdEnabled()));
   }
 
   public EthContext ethContext() {
@@ -270,7 +275,8 @@ public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
     }
 
     final Capability cap = connection.capability(getSupportedProtocol());
-    final ForkId latestForkId = cap.getVersion() >= 64 ? forkIdManager.computeForkId() : null;
+    final ForkId latestForkId =
+        cap.getVersion() >= 64 ? forkIdManager.getForkIdForChainHead() : null;
     // TODO: look to consolidate code below if possible
     // making status non-final and implementing it above would be one way.
     final StatusMessage status =
@@ -296,45 +302,41 @@ public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
       final DisconnectReason reason,
       final boolean initiatedByPeer) {
     ethPeers.registerDisconnect(connection);
-    if (initiatedByPeer) {
-      LOG.debug(
-          "Peer requested to be disconnected ({}), {} peers left: {}",
-          reason,
-          ethPeers.peerCount(),
-          ethPeers);
-    } else {
-      LOG.debug(
-          "Disconnecting from peer ({}), {} peers left: {}",
-          reason,
-          ethPeers.peerCount(),
-          ethPeers);
-    }
+    LOG.debug(
+        "Disconnect - {} - {} - {} - {} peers left",
+        initiatedByPeer ? "Inbound" : "Outbound",
+        reason,
+        connection.getPeerInfo(),
+        ethPeers.peerCount());
   }
 
   private void handleStatusMessage(final EthPeer peer, final MessageData data) {
     final StatusMessage status = StatusMessage.readFrom(data);
     try {
       if (!status.networkId().equals(networkId)) {
-        LOG.debug("Disconnecting from peer with mismatched network id: {}", status.networkId());
+        LOG.debug("{} has mismatched network id: {}", peer, status.networkId());
         peer.disconnect(DisconnectReason.SUBPROTOCOL_TRIGGERED);
       } else if (!forkIdManager.peerCheck(status.forkId()) && status.protocolVersion() > 63) {
         LOG.debug(
-            "Disconnecting from peer with matching network id ({}), but non-matching fork id: {}",
+            "{} has matching network id ({}), but non-matching fork id: {}",
+            peer,
             networkId,
             status.forkId());
         peer.disconnect(DisconnectReason.SUBPROTOCOL_TRIGGERED);
       } else if (forkIdManager.peerCheck(status.genesisHash())) {
         LOG.debug(
-            "Disconnecting from peer with matching network id ({}), but non-matching genesis hash: {}",
+            "{} has matching network id ({}), but non-matching genesis hash: {}",
+            peer,
             networkId,
             status.genesisHash());
         peer.disconnect(DisconnectReason.SUBPROTOCOL_TRIGGERED);
       } else {
         LOG.debug("Received status message from {}: {}", peer, status);
-        peer.registerStatusReceived(status.bestHash(), status.totalDifficulty());
+        peer.registerStatusReceived(
+            status.bestHash(), status.totalDifficulty(), status.protocolVersion());
       }
     } catch (final RLPException e) {
-      LOG.debug("Unable to parse status message, disconnecting from peer.", e);
+      LOG.debug("Unable to parse status message.", e);
       // Parsing errors can happen when clients broadcast network ids outside of the int range,
       // So just disconnect with "subprotocol" error rather than "breach of protocol".
       peer.disconnect(DisconnectReason.SUBPROTOCOL_TRIGGERED);
@@ -352,5 +354,9 @@ public class EthProtocolManager implements ProtocolManager, MinedBlockObserver {
                     new IllegalStateException(
                         "Unable to get total difficulty from blockchain for mined block."));
     blockBroadcaster.propagate(block, totalDifficulty);
+  }
+
+  public List<Bytes> getForkIdAsBytesList() {
+    return forkIdManager.getForkIdForChainHead().getForkIdAsBytesList();
   }
 }

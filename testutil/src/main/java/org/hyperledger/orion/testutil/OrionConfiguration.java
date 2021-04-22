@@ -20,29 +20,35 @@ import java.util.List;
 
 public class OrionConfiguration {
 
-  private final Path publicKey;
-  private final Path privateKey;
+  private final Path[] publicKeys;
+  private final Path[] privateKeys;
   private final Path tempDir;
   private final List<String> otherNodes = new ArrayList<>();
+  private final boolean clearKnownNodes;
+  private final String storage;
 
   public OrionConfiguration(
-      final Path publicKey,
-      final Path privateKey,
+      final Path[] publicKeys,
+      final Path[] privateKeys,
       final Path tempDir,
-      final List<String> otherNodes) {
+      final List<String> otherNodes,
+      final boolean clearKnownNodes,
+      final String storage) {
 
-    this.publicKey = publicKey;
-    this.privateKey = privateKey;
+    this.publicKeys = publicKeys;
+    this.privateKeys = privateKeys;
     this.tempDir = tempDir;
     this.otherNodes.addAll(otherNodes);
+    this.clearKnownNodes = clearKnownNodes;
+    this.storage = storage;
   }
 
-  public Path getPublicKey() {
-    return publicKey;
+  public Path[] getPublicKeys() {
+    return publicKeys;
   }
 
-  public Path getPrivateKey() {
-    return privateKey;
+  public Path[] getPrivateKeys() {
+    return privateKeys;
   }
 
   public Path getTempDir() {
@@ -55,5 +61,13 @@ public class OrionConfiguration {
 
   public void addOtherNode(final String otherNode) {
     otherNodes.add(otherNode);
+  }
+
+  public boolean isClearKnownNodes() {
+    return clearKnownNodes;
+  }
+
+  public String getStorage() {
+    return storage;
   }
 }

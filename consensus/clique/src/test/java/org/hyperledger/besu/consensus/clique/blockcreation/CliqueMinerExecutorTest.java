@@ -33,6 +33,7 @@ import org.hyperledger.besu.consensus.common.VoteTallyCache;
 import org.hyperledger.besu.crypto.NodeKey;
 import org.hyperledger.besu.crypto.NodeKeyUtils;
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.blockcreation.GasLimitCalculator;
 import org.hyperledger.besu.ethereum.core.Address;
 import org.hyperledger.besu.ethereum.core.AddressHelpers;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -47,9 +48,7 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.testutil.TestClock;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Random;
-import java.util.function.Function;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -103,13 +102,12 @@ public class CliqueMinerExecutorTest {
                 TestClock.fixed(),
                 metricsSystem,
                 () -> null,
-                Optional.empty(),
                 TransactionPoolConfiguration.DEFAULT_PRICE_BUMP),
             proposerNodeKey,
             new MiningParameters(AddressHelpers.ofValue(1), Wei.ZERO, vanityData, false),
             mock(CliqueBlockScheduler.class),
             new EpochManager(EPOCH_LENGTH),
-            Function.identity());
+            GasLimitCalculator.constant());
 
     // NOTE: Passing in the *parent* block, so must be 1 less than EPOCH
     final BlockHeader header = blockHeaderBuilder.number(EPOCH_LENGTH - 1).buildHeader();
@@ -144,13 +142,12 @@ public class CliqueMinerExecutorTest {
                 TestClock.fixed(),
                 metricsSystem,
                 () -> null,
-                Optional.empty(),
                 TransactionPoolConfiguration.DEFAULT_PRICE_BUMP),
             proposerNodeKey,
             new MiningParameters(AddressHelpers.ofValue(1), Wei.ZERO, vanityData, false),
             mock(CliqueBlockScheduler.class),
             new EpochManager(EPOCH_LENGTH),
-            Function.identity());
+            GasLimitCalculator.constant());
 
     // Parent block was epoch, so the next block should contain no validators.
     final BlockHeader header = blockHeaderBuilder.number(EPOCH_LENGTH).buildHeader();
@@ -185,13 +182,12 @@ public class CliqueMinerExecutorTest {
                 TestClock.fixed(),
                 metricsSystem,
                 () -> null,
-                Optional.empty(),
                 TransactionPoolConfiguration.DEFAULT_PRICE_BUMP),
             proposerNodeKey,
             new MiningParameters(AddressHelpers.ofValue(1), Wei.ZERO, initialVanityData, false),
             mock(CliqueBlockScheduler.class),
             new EpochManager(EPOCH_LENGTH),
-            Function.identity());
+            GasLimitCalculator.constant());
 
     executor.setExtraData(modifiedVanityData);
     final Bytes extraDataBytes = executor.calculateExtraData(blockHeaderBuilder.buildHeader());

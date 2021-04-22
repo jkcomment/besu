@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.mainnet;
 
 import org.hyperledger.besu.config.experimental.ExperimentalEIPs;
 import org.hyperledger.besu.ethereum.BlockValidator;
+import org.hyperledger.besu.ethereum.chain.BadBlockManager;
 import org.hyperledger.besu.ethereum.core.BlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.core.BlockImporter;
 import org.hyperledger.besu.ethereum.core.Wei;
@@ -36,9 +37,9 @@ public class ProtocolSpec {
 
   private final GasCalculator gasCalculator;
 
-  private final TransactionValidator transactionValidator;
+  private final MainnetTransactionValidator transactionValidator;
 
-  private final TransactionProcessor transactionProcessor;
+  private final MainnetTransactionProcessor transactionProcessor;
 
   private final BlockHeaderValidator blockHeaderValidator;
 
@@ -74,6 +75,10 @@ public class ProtocolSpec {
 
   private final TransactionGasBudgetCalculator gasBudgetCalculator;
 
+  private final BadBlockManager badBlockManager;
+
+  private final Optional<PoWHasher> powHasher;
+
   /**
    * Creates a new protocol specification instance.
    *
@@ -99,12 +104,14 @@ public class ProtocolSpec {
    * @param transactionPriceCalculator the transaction price calculator to use.
    * @param eip1559 an {@link Optional} wrapping {@link EIP1559} manager class if appropriate.
    * @param gasBudgetCalculator the gas budget calculator to use.
+   * @param badBlockManager the cache to use to keep invalid blocks
+   * @param powHasher the proof-of-work hasher
    */
   public ProtocolSpec(
       final String name,
       final EVM evm,
-      final TransactionValidator transactionValidator,
-      final TransactionProcessor transactionProcessor,
+      final MainnetTransactionValidator transactionValidator,
+      final MainnetTransactionProcessor transactionProcessor,
       final PrivateTransactionProcessor privateTransactionProcessor,
       final BlockHeaderValidator blockHeaderValidator,
       final BlockHeaderValidator ommerHeaderValidator,
@@ -122,7 +129,9 @@ public class ProtocolSpec {
       final GasCalculator gasCalculator,
       final TransactionPriceCalculator transactionPriceCalculator,
       final Optional<EIP1559> eip1559,
-      final TransactionGasBudgetCalculator gasBudgetCalculator) {
+      final TransactionGasBudgetCalculator gasBudgetCalculator,
+      final BadBlockManager badBlockManager,
+      final Optional<PoWHasher> powHasher) {
     this.name = name;
     this.evm = evm;
     this.transactionValidator = transactionValidator;
@@ -145,6 +154,8 @@ public class ProtocolSpec {
     this.transactionPriceCalculator = transactionPriceCalculator;
     this.eip1559 = eip1559;
     this.gasBudgetCalculator = gasBudgetCalculator;
+    this.badBlockManager = badBlockManager;
+    this.powHasher = powHasher;
   }
 
   /**
@@ -161,7 +172,7 @@ public class ProtocolSpec {
    *
    * @return the transaction validator
    */
-  public TransactionValidator getTransactionValidator() {
+  public MainnetTransactionValidator getTransactionValidator() {
     return transactionValidator;
   }
 
@@ -170,7 +181,7 @@ public class ProtocolSpec {
    *
    * @return the transaction processor
    */
-  public TransactionProcessor getTransactionProcessor() {
+  public MainnetTransactionProcessor getTransactionProcessor() {
     return transactionProcessor;
   }
 
@@ -334,5 +345,23 @@ public class ProtocolSpec {
    */
   public TransactionGasBudgetCalculator getGasBudgetCalculator() {
     return gasBudgetCalculator;
+  }
+
+  /**
+   * Returns the bad blocks manager
+   *
+   * @return the bad blocks manager
+   */
+  public BadBlockManager getBadBlocksManager() {
+    return badBlockManager;
+  }
+
+  /**
+   * Returns the Proof-of-Work hasher
+   *
+   * @return the Proof-of-Work hasher
+   */
+  public Optional<PoWHasher> getPoWHasher() {
+    return powHasher;
   }
 }

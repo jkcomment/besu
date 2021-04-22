@@ -29,7 +29,7 @@ public class ForkId {
   final Bytes next;
   Bytes forkIdRLP;
 
-  protected ForkId(final Bytes hash, final Bytes next) {
+  public ForkId(final Bytes hash, final Bytes next) {
     this.hash = hash;
     this.next = next;
     createForkIdRLP();
@@ -45,6 +45,14 @@ public class ForkId {
 
   public Bytes getHash() {
     return hash;
+  }
+
+  public List<Bytes> getForkIdAsBytesList() {
+    List<Bytes> bytesList = new ArrayList<>();
+    bytesList.add(hash);
+    bytesList.add(next);
+
+    return bytesList;
   }
 
   void createForkIdRLP() {

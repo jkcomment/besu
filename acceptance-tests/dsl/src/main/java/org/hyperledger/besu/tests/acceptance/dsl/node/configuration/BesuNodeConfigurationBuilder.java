@@ -17,6 +17,7 @@ package org.hyperledger.besu.tests.acceptance.dsl.node.configuration;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Collections.singletonList;
 
+import org.hyperledger.besu.cli.config.NetworkName;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis;
 import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.WebSocketConfiguration;
@@ -47,7 +48,7 @@ public class BesuNodeConfigurationBuilder {
   private WebSocketConfiguration webSocketConfiguration = WebSocketConfiguration.createDefault();
   private MetricsConfiguration metricsConfiguration = MetricsConfiguration.builder().build();
   private Optional<PermissioningConfiguration> permissioningConfiguration = Optional.empty();
-  private Optional<String> keyFilePath = Optional.empty();
+  private String keyFilePath = null;
   private boolean devMode = true;
   private GenesisConfigurationProvider genesisConfigProvider = ignore -> Optional.empty();
   private Boolean p2pEnabled = true;
@@ -55,13 +56,15 @@ public class BesuNodeConfigurationBuilder {
   private boolean discoveryEnabled = true;
   private boolean bootnodeEligible = true;
   private boolean revertReasonEnabled = false;
+  private NetworkName network = null;
   private boolean secp256K1Native = false;
   private boolean altbn128Native = false;
   private final List<String> plugins = new ArrayList<>();
   private final List<String> extraCLIOptions = new ArrayList<>();
   private List<String> staticNodes = new ArrayList<>();
+  private boolean isDnsEnabled = false;
   private Optional<PrivacyParameters> privacyParameters = Optional.empty();
-  private Optional<String> runCommand = Optional.empty();
+  private List<String> runCommand = new ArrayList<>();
 
   public BesuNodeConfigurationBuilder() {
     // Check connections more frequently during acceptance tests to cut down on
@@ -164,6 +167,11 @@ public class BesuNodeConfigurationBuilder {
     return this;
   }
 
+  public BesuNodeConfigurationBuilder network(final NetworkName network) {
+    this.network = network;
+    return this;
+  }
+
   public BesuNodeConfigurationBuilder webSocketEnabled() {
     final WebSocketConfiguration config = WebSocketConfiguration.createDefault();
     config.setEnabled(true);
@@ -211,7 +219,7 @@ public class BesuNodeConfigurationBuilder {
   }
 
   public BesuNodeConfigurationBuilder keyFilePath(final String keyFilePath) {
-    this.keyFilePath = Optional.of(keyFilePath);
+    this.keyFilePath = keyFilePath;
     return this;
   }
 
@@ -268,13 +276,18 @@ public class BesuNodeConfigurationBuilder {
     return this;
   }
 
+  public BesuNodeConfigurationBuilder dnsEnabled(final boolean isDnsEnabled) {
+    this.isDnsEnabled = isDnsEnabled;
+    return this;
+  }
+
   public BesuNodeConfigurationBuilder privacyParameters(final PrivacyParameters privacyParameters) {
     this.privacyParameters = Optional.ofNullable(privacyParameters);
     return this;
   }
 
-  public BesuNodeConfigurationBuilder run(final String command) {
-    this.runCommand = Optional.ofNullable(command);
+  public BesuNodeConfigurationBuilder run(final String... commands) {
+    this.runCommand = List.of(commands);
     return this;
   }
 
@@ -287,8 +300,9 @@ public class BesuNodeConfigurationBuilder {
         webSocketConfiguration,
         metricsConfiguration,
         permissioningConfiguration,
-        keyFilePath,
+        Optional.ofNullable(keyFilePath),
         devMode,
+        network,
         genesisConfigProvider,
         p2pEnabled,
         networkingConfiguration,
@@ -300,6 +314,7 @@ public class BesuNodeConfigurationBuilder {
         plugins,
         extraCLIOptions,
         staticNodes,
+        isDnsEnabled,
         privacyParameters,
         runCommand);
   }

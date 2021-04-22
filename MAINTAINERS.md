@@ -10,10 +10,8 @@
 | Adrian Sutton    | ajsutton         | ajsutton         |
 | Antoine Toulme   | atoulme          | atoulme          |
 | Byron Gravenorst | bgravenorst      | bgravenorst      |
-| Chris Hare       | CjHare           | cjhare           |
-| Edward Evans     | EdJoJob          | EdJoJob          |
+| David Mechler    | davemec          | davemec          |
 | Edward Mack      | edwardmack       | mackcom          | 
-| Ivaylo Kirilov   | iikirilov        | iikirilov        |
 | Jason Frame      | jframe           | jframe           |
 | Joshua Fernandes | joshuafernandes  | joshuafernandes  |
 | Lucas Saldanha   | lucassaldanha    | lucassaldanha    |
@@ -26,19 +24,18 @@
 | Stefan Pingel    | pinges           | pinges           |
 | Trent Mohay      | rain-on          | trent.mohay      |
 | Rai Sur          | RatanRSur        | ratanraisur      |
-| Rob Dawson       | rojotek          | RobDawson        |
 | Danno Ferrin     | shemnon          | shemnon          |
-| Tim Beiko        | timbeiko         | timbeiko         |
 | Usman Saleem     | usmansaleem      | usmansaleem      |
 
 ## Emeritus Maintainers
 
-None.
-<!--
-| Name | Github | LFID |
-|------|--------|------|
-| null | null   | null |
--->
+| Name             | Github           | LFID             |
+|------------------|------------------|------------------|
+| Chris Hare       | CjHare           | cjhare           |
+| Edward Evans     | EdJoJob          | EdJoJob          |
+| Ivaylo Kirilov   | iikirilov        | iikirilov        |
+| Rob Dawson       | rojotek          | RobDawson        |
+| Tim Beiko        | timbeiko         | timbeiko         |
 
 ## Becoming a Maintainer
 

@@ -30,7 +30,7 @@ import org.hyperledger.besu.ethereum.core.Gas;
 import org.hyperledger.besu.ethereum.core.Hash;
 import org.hyperledger.besu.ethereum.core.Wei;
 import org.hyperledger.besu.ethereum.debug.TraceFrame;
-import org.hyperledger.besu.ethereum.mainnet.TransactionProcessor;
+import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -62,7 +62,7 @@ public class DebugTraceBlockByHashTest {
     final TraceFrame traceFrame =
         new TraceFrame(
             12,
-            "NONE",
+            Optional.of("NONE"),
             Gas.of(45),
             Optional.of(Gas.of(56)),
             Gas.ZERO,
@@ -85,8 +85,8 @@ public class DebugTraceBlockByHashTest {
             Optional.empty(),
             Optional.empty());
 
-    final TransactionProcessor.Result transaction1Result = mock(TransactionProcessor.Result.class);
-    final TransactionProcessor.Result transaction2Result = mock(TransactionProcessor.Result.class);
+    final TransactionProcessingResult transaction1Result = mock(TransactionProcessingResult.class);
+    final TransactionProcessingResult transaction2Result = mock(TransactionProcessingResult.class);
 
     final TransactionTrace transaction1Trace = mock(TransactionTrace.class);
     final TransactionTrace transaction2Trace = mock(TransactionTrace.class);

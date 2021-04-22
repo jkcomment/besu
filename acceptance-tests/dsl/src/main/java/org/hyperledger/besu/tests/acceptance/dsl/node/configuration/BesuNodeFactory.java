@@ -17,6 +17,9 @@ package org.hyperledger.besu.tests.acceptance.dsl.node.configuration;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 
+import org.hyperledger.besu.config.GenesisConfigFile;
+import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
+import org.hyperledger.besu.crypto.SignatureAlgorithmType;
 import org.hyperledger.besu.enclave.EnclaveFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApi;
@@ -26,15 +29,19 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.MiningParametersTestBuilder;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.Wei;
+import org.hyperledger.besu.ethereum.permissioning.LocalPermissioningConfiguration;
+import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
 import org.hyperledger.besu.tests.acceptance.dsl.node.BesuNode;
 import org.hyperledger.besu.tests.acceptance.dsl.node.Node;
 import org.hyperledger.besu.tests.acceptance.dsl.node.RunnableNode;
 import org.hyperledger.besu.tests.acceptance.dsl.node.configuration.genesis.GenesisConfigurationFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -47,6 +54,8 @@ public class BesuNodeFactory {
   private final NodeConfigurationFactory node = new NodeConfigurationFactory();
 
   public BesuNode create(final BesuNodeConfiguration config) throws IOException {
+    instantiateSignatureAlgorithmFactory(config);
+
     return new BesuNode(
         config.getName(),
         config.getDataPath(),
@@ -57,6 +66,7 @@ public class BesuNodeFactory {
         config.getPermissioningConfiguration(),
         config.getKeyFilePath(),
         config.isDevMode(),
+        config.getNetwork(),
         config.getGenesisConfigProvider(),
         config.isP2pEnabled(),
         config.getNetworkingConfiguration(),
@@ -68,6 +78,7 @@ public class BesuNodeFactory {
         config.getPlugins(),
         config.getExtraCLIOptions(),
         config.getStaticNodes(),
+        config.isDnsEnabled(),
         config.getPrivacyParameters(),
         config.getRunCommand());
   }
@@ -194,13 +205,15 @@ public class BesuNodeFactory {
       final String name,
       final String enclaveUrl,
       final String authFile,
-      final String privTransactionSigningKey)
+      final String privTransactionSigningKey,
+      final boolean enableOnChainPrivacy)
       throws IOException, URISyntaxException {
     final PrivacyParameters.Builder privacyParametersBuilder = new PrivacyParameters.Builder();
     final PrivacyParameters privacyParameters =
         privacyParametersBuilder
             .setMultiTenancyEnabled(true)
             .setEnabled(true)
+            .setOnchainPrivacyGroupsEnabled(enableOnChainPrivacy)
             .setStorageProvider(new InMemoryPrivacyStorageProvider())
             .setEnclaveFactory(new EnclaveFactory(Vertx.vertx()))
             .setEnclaveUrl(URI.create(enclaveUrl))
@@ -283,6 +296,32 @@ public class BesuNodeFactory {
             .build());
   }
 
+  public BesuNode createIbft2NodeWithLocalAccountPermissioning(
+      final String name,
+      final String genesisFile,
+      final List<String> accountAllowList,
+      final File configFile)
+      throws IOException {
+    final LocalPermissioningConfiguration config = LocalPermissioningConfiguration.createDefault();
+    config.setAccountAllowlist(accountAllowList);
+    config.setAccountPermissioningConfigFilePath(configFile.getAbsolutePath());
+    final PermissioningConfiguration permissioningConfiguration =
+        new PermissioningConfiguration(Optional.of(config), Optional.empty(), Optional.empty());
+    return create(
+        new BesuNodeConfigurationBuilder()
+            .name(name)
+            .miningEnabled()
+            .jsonRpcConfiguration(node.createJsonRpcWithIbft2AdminEnabledConfig())
+            .webSocketConfiguration(node.createWebSocketEnabledConfig())
+            .permissioningConfiguration(permissioningConfiguration)
+            .devMode(false)
+            .genesisConfigProvider(
+                validators ->
+                    genesis.createIbft2GenesisConfigFilterBootnode(validators, genesisFile))
+            .bootnodeEligible(false)
+            .build());
+  }
+
   public BesuNode createIbft2Node(final String name, final String genesisFile) throws IOException {
     return create(
         new BesuNodeConfigurationBuilder()
@@ -303,10 +342,22 @@ public class BesuNodeFactory {
         new BesuNodeConfigurationBuilder()
             .name(name)
             .miningEnabled()
-            .jsonRpcConfiguration(node.createJsonRpcWithIbft2EnabledConfig())
+            .jsonRpcConfiguration(node.createJsonRpcWithIbft2EnabledConfig(false))
             .webSocketConfiguration(node.createWebSocketEnabledConfig())
             .devMode(false)
             .genesisConfigProvider(genesis::createIbft2GenesisConfig)
+            .build());
+  }
+
+  public BesuNode createQbftNode(final String name) throws IOException {
+    return create(
+        new BesuNodeConfigurationBuilder()
+            .name(name)
+            .miningEnabled()
+            .jsonRpcConfiguration(node.createJsonRpcWithQbftEnabledConfig(false))
+            .webSocketConfiguration(node.createWebSocketEnabledConfig())
+            .devMode(false)
+            .genesisConfigProvider(genesis::createQbftGenesisConfig)
             .build());
   }
 
@@ -362,13 +413,30 @@ public class BesuNodeFactory {
         new BesuNodeConfigurationBuilder()
             .name(name)
             .miningEnabled()
-            .jsonRpcConfiguration(node.createJsonRpcWithIbft2EnabledConfig())
+            .jsonRpcConfiguration(node.createJsonRpcWithIbft2EnabledConfig(false))
             .webSocketConfiguration(node.createWebSocketEnabledConfig())
             .devMode(false)
             .genesisConfigProvider(
                 nodes ->
                     node.createGenesisConfigForValidators(
                         asList(validators), nodes, genesis::createIbft2GenesisConfig))
+            .build());
+  }
+
+  public BesuNode createQbftNodeWithValidators(final String name, final String... validators)
+      throws IOException {
+
+    return create(
+        new BesuNodeConfigurationBuilder()
+            .name(name)
+            .miningEnabled()
+            .jsonRpcConfiguration(node.createJsonRpcWithQbftEnabledConfig(false))
+            .webSocketConfiguration(node.createWebSocketEnabledConfig())
+            .devMode(false)
+            .genesisConfigProvider(
+                nodes ->
+                    node.createGenesisConfigForValidators(
+                        asList(validators), nodes, genesis::createQbftGenesisConfig))
             .build());
   }
 
@@ -395,5 +463,33 @@ public class BesuNodeFactory {
 
   public BesuNode runCommand(final String command) throws IOException {
     return create(new BesuNodeConfigurationBuilder().name("run " + command).run(command).build());
+  }
+
+  private void instantiateSignatureAlgorithmFactory(final BesuNodeConfiguration config) {
+    if (SignatureAlgorithmFactory.isInstanceSet()) {
+      return;
+    }
+
+    Optional<String> ecCurve = getEcCurveFromGenesisFile(config);
+
+    if (ecCurve.isEmpty()) {
+      SignatureAlgorithmFactory.setDefaultInstance();
+      return;
+    }
+
+    SignatureAlgorithmFactory.setInstance(SignatureAlgorithmType.create(ecCurve.get()));
+  }
+
+  private Optional<String> getEcCurveFromGenesisFile(final BesuNodeConfiguration config) {
+    Optional<String> genesisConfig =
+        config.getGenesisConfigProvider().create(Collections.emptyList());
+
+    if (genesisConfig.isEmpty()) {
+      return Optional.empty();
+    }
+
+    GenesisConfigFile genesisConfigFile = GenesisConfigFile.fromConfig(genesisConfig.get());
+
+    return genesisConfigFile.getConfigOptions().getEcCurve();
   }
 }

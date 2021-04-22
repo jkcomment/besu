@@ -20,14 +20,6 @@ public interface FeeMarket {
 
   long getBasefeeMaxChangeDenominator();
 
-  long getTargetGasUsed();
-
-  long getMaxGas();
-
-  long getDecayRange();
-
-  long getGasIncrementAmount();
-
   long getInitialBasefee();
 
   long getSlackCoefficient();
@@ -35,9 +27,7 @@ public interface FeeMarket {
   static FeeMarket eip1559() {
     return new FeeMarketConfig(
         ExperimentalEIPs.basefeeMaxChangeDenominator,
-        ExperimentalEIPs.targetGasUsed,
-        ExperimentalEIPs.slackCoefficient,
-        ExperimentalEIPs.decayRange,
-        ExperimentalEIPs.initialBasefee);
+        ExperimentalEIPs.initialBasefee,
+        ExperimentalEIPs.slackCoefficient);
   }
 }

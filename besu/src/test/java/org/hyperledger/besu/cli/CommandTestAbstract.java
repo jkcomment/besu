@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyFloat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -30,21 +31,25 @@ import org.hyperledger.besu.chainexport.RlpBlockExporter;
 import org.hyperledger.besu.chainimport.JsonBlockImporter;
 import org.hyperledger.besu.chainimport.RlpBlockImporter;
 import org.hyperledger.besu.cli.config.EthNetworkConfig;
-import org.hyperledger.besu.cli.options.EthProtocolOptions;
-import org.hyperledger.besu.cli.options.MetricsCLIOptions;
-import org.hyperledger.besu.cli.options.NetworkingOptions;
-import org.hyperledger.besu.cli.options.SynchronizerOptions;
-import org.hyperledger.besu.cli.options.TransactionPoolOptions;
+import org.hyperledger.besu.cli.options.unstable.EthProtocolOptions;
+import org.hyperledger.besu.cli.options.unstable.LauncherOptions;
+import org.hyperledger.besu.cli.options.unstable.MetricsCLIOptions;
+import org.hyperledger.besu.cli.options.unstable.NetworkingOptions;
+import org.hyperledger.besu.cli.options.unstable.SynchronizerOptions;
+import org.hyperledger.besu.cli.options.unstable.TransactionPoolOptions;
 import org.hyperledger.besu.controller.BesuController;
 import org.hyperledger.besu.controller.BesuControllerBuilder;
 import org.hyperledger.besu.controller.NoopPluginServiceFactory;
+import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.NodeKey;
-import org.hyperledger.besu.crypto.SECP256K1;
+import org.hyperledger.besu.crypto.SignatureAlgorithm;
+import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.graphql.GraphQLConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.WebSocketConfiguration;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
+import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.EthProtocolManager;
 import org.hyperledger.besu.ethereum.eth.sync.BlockBroadcaster;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
@@ -52,6 +57,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfigurati
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
+import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
 import org.hyperledger.besu.metrics.prometheus.MetricsConfiguration;
 import org.hyperledger.besu.plugin.services.BesuConfiguration;
 import org.hyperledger.besu.plugin.services.PicoCLIOptions;
@@ -113,7 +119,7 @@ public abstract class CommandTestAbstract {
   private final HashMap<String, String> environment = new HashMap<>();
 
   private final List<TestBesuCommand> besuCommands = new ArrayList<>();
-  private SECP256K1.KeyPair keyPair;
+  private KeyPair keyPair;
 
   @Mock protected RunnerBuilder mockRunnerBuilder;
   @Mock protected Runner mockRunner;
@@ -154,6 +160,8 @@ public abstract class CommandTestAbstract {
   @Captor protected ArgumentCaptor<WebSocketConfiguration> wsRpcConfigArgumentCaptor;
   @Captor protected ArgumentCaptor<MetricsConfiguration> metricsConfigArgumentCaptor;
   @Captor protected ArgumentCaptor<StorageProvider> storageProviderArgumentCaptor;
+  @Captor protected ArgumentCaptor<EthProtocolConfiguration> ethProtocolConfigurationArgumentCaptor;
+  @Captor protected ArgumentCaptor<DataStorageConfiguration> dataStorageConfigurationArgumentCaptor;
 
   @Captor
   protected ArgumentCaptor<PermissioningConfiguration> permissioningConfigurationArgumentCaptor;
@@ -183,8 +191,10 @@ public abstract class CommandTestAbstract {
     when(mockControllerBuilder.isPruningEnabled(anyBoolean())).thenReturn(mockControllerBuilder);
     when(mockControllerBuilder.pruningConfiguration(any())).thenReturn(mockControllerBuilder);
     when(mockControllerBuilder.genesisConfigOverrides(any())).thenReturn(mockControllerBuilder);
-    when(mockControllerBuilder.targetGasLimit(any())).thenReturn(mockControllerBuilder);
+    when(mockControllerBuilder.gasLimitCalculator(any())).thenReturn(mockControllerBuilder);
     when(mockControllerBuilder.requiredBlocks(any())).thenReturn(mockControllerBuilder);
+    when(mockControllerBuilder.reorgLoggingThreshold(anyLong())).thenReturn(mockControllerBuilder);
+    when(mockControllerBuilder.dataStorageConfiguration(any())).thenReturn(mockControllerBuilder);
 
     // doReturn used because of generic BesuController
     doReturn(mockController).when(mockControllerBuilder).build();
@@ -211,6 +221,7 @@ public abstract class CommandTestAbstract {
         .thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.fractionRemoteConnectionsAllowed(anyFloat()))
         .thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.randomPeerPriority(anyBoolean())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.p2pEnabled(anyBoolean())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.natMethod(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.natManagerServiceName(any())).thenReturn(mockRunnerBuilder);
@@ -218,6 +229,7 @@ public abstract class CommandTestAbstract {
     when(mockRunnerBuilder.jsonRpcConfiguration(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.graphQLConfiguration(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.webSocketConfiguration(any())).thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.apiConfiguration(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.dataDir(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.bannedNodeIds(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.metricsSystem(any())).thenReturn(mockRunnerBuilder);
@@ -227,11 +239,17 @@ public abstract class CommandTestAbstract {
     when(mockRunnerBuilder.besuPluginContext(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.autoLogBloomCaching(anyBoolean())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.pidPath(any())).thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.ethstatsUrl(anyString())).thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.ethstatsContact(anyString())).thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.storageProvider(any())).thenReturn(mockRunnerBuilder);
+    when(mockRunnerBuilder.forkIdSupplier(any())).thenReturn(mockRunnerBuilder);
     when(mockRunnerBuilder.build()).thenReturn(mockRunner);
+
+    final SignatureAlgorithm signatureAlgorithm = SignatureAlgorithmFactory.getInstance();
 
     final Bytes32 keyPairPrvKey =
         Bytes32.fromHexString("0xf7a58d5e755d51fa2f6206e91dd574597c73248aaf946ec1964b8c6268d6207b");
-    keyPair = SECP256K1.KeyPair.create(SECP256K1.PrivateKey.create(keyPairPrvKey));
+    keyPair = signatureAlgorithm.createKeyPair(signatureAlgorithm.createPrivateKey(keyPairPrvKey));
 
     lenient().when(nodeKey.getPublicKey()).thenReturn(keyPair.getPublicKey());
 
@@ -320,12 +338,12 @@ public abstract class CommandTestAbstract {
     @CommandLine.Spec CommandLine.Model.CommandSpec spec;
     private Vertx vertx;
     private final NodeKey mockNodeKey;
-    private final SECP256K1.KeyPair keyPair;
+    private final KeyPair keyPair;
 
     TestBesuCommand(
         final Logger mockLogger,
         final NodeKey mockNodeKey,
-        final SECP256K1.KeyPair keyPair,
+        final KeyPair keyPair,
         final Supplier<RlpBlockImporter> mockBlockImporter,
         final Function<BesuController, JsonBlockImporter> jsonBlockImporterFactory,
         final Function<Blockchain, RlpBlockExporter> rlpBlockExporterFactory,
@@ -368,7 +386,7 @@ public abstract class CommandTestAbstract {
     }
 
     @Override
-    SECP256K1.KeyPair loadKeyPair() {
+    KeyPair loadKeyPair() {
       // for testing.
       return keyPair;
     }
@@ -378,23 +396,27 @@ public abstract class CommandTestAbstract {
     }
 
     public NetworkingOptions getNetworkingOptions() {
-      return networkingOptions;
+      return unstableNetworkingOptions;
     }
 
     public SynchronizerOptions getSynchronizerOptions() {
-      return synchronizerOptions;
+      return unstableSynchronizerOptions;
     }
 
     public EthProtocolOptions getEthProtocolOptions() {
-      return ethProtocolOptions;
+      return unstableEthProtocolOptions;
     }
 
     public TransactionPoolOptions getTransactionPoolOptions() {
-      return transactionPoolOptions;
+      return unstableTransactionPoolOptions;
     }
 
     public MetricsCLIOptions getMetricsCLIOptions() {
-      return metricsCLIOptions;
+      return unstableMetricsCLIOptions;
+    }
+
+    public LauncherOptions getLauncherOptions() {
+      return unstableLauncherOptions;
     }
 
     public void close() {

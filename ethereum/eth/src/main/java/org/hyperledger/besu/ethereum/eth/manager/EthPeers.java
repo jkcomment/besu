@@ -76,8 +76,19 @@ public class EthPeers {
     if (peer != null) {
       disconnectCallbacks.forEach(callback -> callback.onDisconnect(peer));
       peer.handleDisconnect();
+      abortPendingRequestsAssignedToDisconnectedPeers();
     }
-    checkPendingConnections();
+    reattemptPendingPeerRequests();
+  }
+
+  private void abortPendingRequestsAssignedToDisconnectedPeers() {
+    synchronized (this) {
+      pendingRequests.stream()
+          .filter(
+              pendingPeerRequest ->
+                  pendingPeerRequest.getAssignedPeer().map(EthPeer::isDisconnected).orElse(false))
+          .forEach(PendingPeerRequest::abort);
+    }
   }
 
   public EthPeer peer(final PeerConnection peerConnection) {
@@ -99,11 +110,11 @@ public class EthPeers {
   public void dispatchMessage(final EthPeer peer, final EthMessage ethMessage) {
     peer.dispatch(ethMessage);
     if (peer.hasAvailableRequestCapacity()) {
-      checkPendingConnections();
+      reattemptPendingPeerRequests();
     }
   }
 
-  private void checkPendingConnections() {
+  private void reattemptPendingPeerRequests() {
     synchronized (this) {
       pendingRequests.removeIf(PendingPeerRequest::attemptExecution);
     }
@@ -125,8 +136,12 @@ public class EthPeers {
     return connections.size();
   }
 
+  public Stream<EthPeer> streamAllPeers() {
+    return connections.values().stream();
+  }
+
   public Stream<EthPeer> streamAvailablePeers() {
-    return connections.values().stream().filter(EthPeer::readyForRequests);
+    return streamAllPeers().filter(EthPeer::readyForRequests);
   }
 
   public Stream<EthPeer> streamBestPeers() {
@@ -138,7 +153,8 @@ public class EthPeers {
   }
 
   public Optional<EthPeer> bestPeerWithHeightEstimate() {
-    return bestPeerMatchingCriteria(p -> p.chainState().hasEstimatedHeight());
+    return bestPeerMatchingCriteria(
+        p -> p.isFullyValidated() && p.chainState().hasEstimatedHeight());
   }
 
   public Optional<EthPeer> bestPeerMatchingCriteria(final Predicate<EthPeer> matchesCriteria) {

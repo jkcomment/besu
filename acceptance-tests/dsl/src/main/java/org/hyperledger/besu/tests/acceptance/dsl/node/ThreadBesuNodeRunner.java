@@ -22,11 +22,11 @@ import org.hyperledger.besu.RunnerBuilder;
 import org.hyperledger.besu.cli.config.EthNetworkConfig;
 import org.hyperledger.besu.controller.BesuController;
 import org.hyperledger.besu.controller.BesuControllerBuilder;
-import org.hyperledger.besu.controller.GasLimitCalculator;
 import org.hyperledger.besu.crypto.KeyPairSecurityModule;
 import org.hyperledger.besu.crypto.KeyPairUtil;
 import org.hyperledger.besu.crypto.NodeKey;
 import org.hyperledger.besu.ethereum.api.graphql.GraphQLConfiguration;
+import org.hyperledger.besu.ethereum.blockcreation.GasLimitCalculator;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
@@ -34,8 +34,8 @@ import org.hyperledger.besu.ethereum.p2p.peers.EnodeURL;
 import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStorageProvider;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStorageProviderBuilder;
+import org.hyperledger.besu.metrics.MetricsSystemFactory;
 import org.hyperledger.besu.metrics.ObservableMetricsSystem;
-import org.hyperledger.besu.metrics.prometheus.PrometheusMetricsSystem;
 import org.hyperledger.besu.plugin.services.BesuConfiguration;
 import org.hyperledger.besu.plugin.services.BesuEvents;
 import org.hyperledger.besu.plugin.services.PicoCLIOptions;
@@ -111,7 +111,7 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
     }
     ThreadContext.put("node", node.getName());
 
-    if (node.getRunCommand().isPresent()) {
+    if (!node.getRunCommand().isEmpty()) {
       throw new UnsupportedOperationException("commands are not supported with thread runner");
     }
 
@@ -128,7 +128,7 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
                     node, storageService, securityModuleService, commonPluginConfiguration));
 
     final ObservableMetricsSystem metricsSystem =
-        PrometheusMetricsSystem.init(node.getMetricsConfiguration());
+        MetricsSystemFactory.create(node.getMetricsConfiguration());
     final List<EnodeURL> bootnodes =
         node.getConfiguration().getBootnodes().stream()
             .map(EnodeURL::fromURI)
@@ -156,12 +156,12 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
             .privacyParameters(node.getPrivacyParameters())
             .nodeKey(new NodeKey(new KeyPairSecurityModule(KeyPairUtil.loadKeyPair(dataDir))))
             .metricsSystem(metricsSystem)
-            .transactionPoolConfiguration(TransactionPoolConfiguration.builder().build())
+            .transactionPoolConfiguration(TransactionPoolConfiguration.DEFAULT)
             .ethProtocolConfiguration(EthProtocolConfiguration.defaultConfig())
             .clock(Clock.systemUTC())
             .isRevertReasonEnabled(node.isRevertReasonEnabled())
             .storageProvider(storageProvider)
-            .targetGasLimit(GasLimitCalculator.DEFAULT)
+            .gasLimitCalculator(GasLimitCalculator.constant())
             .build();
 
     final RunnerBuilder runnerBuilder = new RunnerBuilder();
@@ -204,6 +204,8 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
                     .collect(Collectors.toList()))
             .besuPluginContext(new BesuPluginContextImpl())
             .autoLogBloomCaching(false)
+            .storageProvider(storageProvider)
+            .forkIdSupplier(() -> besuController.getProtocolManager().getForkIdAsBytesList())
             .build();
 
     runner.start();
@@ -250,5 +252,15 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
     } else {
       LOG.error("There was a request to kill an unknown node: {}", name);
     }
+  }
+
+  @Override
+  public void startConsoleCapture() {
+    throw new RuntimeException("Console contents can only be captured in process execution");
+  }
+
+  @Override
+  public String getConsoleContents() {
+    throw new RuntimeException("Console contents can only be captured in process execution");
   }
 }

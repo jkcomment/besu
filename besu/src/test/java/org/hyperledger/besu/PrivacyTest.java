@@ -18,12 +18,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
 import org.hyperledger.besu.controller.BesuController;
-import org.hyperledger.besu.controller.GasLimitCalculator;
 import org.hyperledger.besu.crypto.NodeKeyUtils;
 import org.hyperledger.besu.enclave.EnclaveFactory;
+import org.hyperledger.besu.ethereum.blockcreation.GasLimitCalculator;
 import org.hyperledger.besu.ethereum.core.Account;
 import org.hyperledger.besu.ethereum.core.Address;
-import org.hyperledger.besu.ethereum.core.InMemoryStorageProvider;
+import org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider;
 import org.hyperledger.besu.ethereum.core.MiningParametersTestBuilder;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
@@ -83,11 +83,6 @@ public class PrivacyTest {
   public void onchainEnabledPrivacy() throws IOException, URISyntaxException {
     final BesuController besuController = setUpControllerWithPrivacyEnabled(true);
 
-    final PrecompiledContract privacyPrecompiledContract =
-        getPrecompile(besuController, Address.DEFAULT_PRIVACY);
-
-    assertThat(privacyPrecompiledContract.getName()).isEqualTo("Privacy");
-
     final PrecompiledContract onchainPrecompiledContract =
         getPrecompile(besuController, Address.ONCHAIN_PRIVACY);
 
@@ -100,7 +95,6 @@ public class PrivacyTest {
     final Path dbDir = dataDir.resolve("database");
     final PrivacyParameters privacyParameters =
         new PrivacyParameters.Builder()
-            .setPrivacyAddress(Address.PRIVACY)
             .setEnabled(true)
             .setEnclaveUrl(new URI("http://127.0.0.1:8000"))
             .setStorageProvider(createKeyValueStorageProvider(dataDir, dbDir))
@@ -111,7 +105,7 @@ public class PrivacyTest {
         .fromGenesisConfig(GenesisConfigFile.mainnet())
         .synchronizerConfiguration(SynchronizerConfiguration.builder().build())
         .ethProtocolConfiguration(EthProtocolConfiguration.defaultConfig())
-        .storageProvider(new InMemoryStorageProvider())
+        .storageProvider(new InMemoryKeyValueStorageProvider())
         .networkId(BigInteger.ONE)
         .miningParameters(new MiningParametersTestBuilder().enabled(false).build())
         .nodeKey(NodeKeyUtils.generate())
@@ -119,8 +113,8 @@ public class PrivacyTest {
         .dataDirectory(dataDir)
         .clock(TestClock.fixed())
         .privacyParameters(privacyParameters)
-        .transactionPoolConfiguration(TransactionPoolConfiguration.builder().build())
-        .targetGasLimit(GasLimitCalculator.DEFAULT)
+        .transactionPoolConfiguration(TransactionPoolConfiguration.DEFAULT)
+        .gasLimitCalculator(GasLimitCalculator.constant())
         .build();
   }
 

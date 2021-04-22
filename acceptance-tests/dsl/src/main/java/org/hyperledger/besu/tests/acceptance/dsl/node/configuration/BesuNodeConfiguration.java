@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.tests.acceptance.dsl.node.configuration;
 
+import org.hyperledger.besu.cli.config.NetworkName;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.WebSocketConfiguration;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
@@ -49,8 +50,10 @@ public class BesuNodeConfiguration {
   private final List<String> plugins;
   private final List<String> extraCLIOptions;
   private final List<String> staticNodes;
+  private final boolean isDnsEnabled;
   private final Optional<PrivacyParameters> privacyParameters;
-  private final Optional<String> runCommand;
+  private final List<String> runCommand;
+  private final NetworkName network;
 
   BesuNodeConfiguration(
       final String name,
@@ -62,6 +65,7 @@ public class BesuNodeConfiguration {
       final Optional<PermissioningConfiguration> permissioningConfiguration,
       final Optional<String> keyFilePath,
       final boolean devMode,
+      final NetworkName network,
       final GenesisConfigurationProvider genesisConfigProvider,
       final boolean p2pEnabled,
       final NetworkingConfiguration networkingConfiguration,
@@ -73,8 +77,9 @@ public class BesuNodeConfiguration {
       final List<String> plugins,
       final List<String> extraCLIOptions,
       final List<String> staticNodes,
+      final boolean isDnsEnabled,
       final Optional<PrivacyParameters> privacyParameters,
-      final Optional<String> runCommand) {
+      final List<String> runCommand) {
     this.name = name;
     this.miningParameters = miningParameters;
     this.jsonRpcConfiguration = jsonRpcConfiguration;
@@ -84,6 +89,7 @@ public class BesuNodeConfiguration {
     this.keyFilePath = keyFilePath;
     this.dataPath = dataPath;
     this.devMode = devMode;
+    this.network = network;
     this.genesisConfigProvider = genesisConfigProvider;
     this.p2pEnabled = p2pEnabled;
     this.networkingConfiguration = networkingConfiguration;
@@ -95,6 +101,7 @@ public class BesuNodeConfiguration {
     this.plugins = plugins;
     this.extraCLIOptions = extraCLIOptions;
     this.staticNodes = staticNodes;
+    this.isDnsEnabled = isDnsEnabled;
     this.privacyParameters = privacyParameters;
     this.runCommand = runCommand;
   }
@@ -179,11 +186,19 @@ public class BesuNodeConfiguration {
     return staticNodes;
   }
 
+  public boolean isDnsEnabled() {
+    return isDnsEnabled;
+  }
+
   public Optional<PrivacyParameters> getPrivacyParameters() {
     return privacyParameters;
   }
 
-  public Optional<String> getRunCommand() {
+  public List<String> getRunCommand() {
     return runCommand;
+  }
+
+  public NetworkName getNetwork() {
+    return network;
   }
 }

@@ -16,7 +16,7 @@ package org.hyperledger.besu.ethereum.eth.manager;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.hyperledger.besu.ethereum.core.InMemoryStorageProvider.createInMemoryWorldStateArchive;
+import static org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider.createInMemoryWorldStateArchive;
 import static org.mockito.Mockito.mock;
 
 import org.hyperledger.besu.ethereum.chain.Blockchain;
@@ -125,7 +125,7 @@ public class RespondingEthPeer {
             caps, (cap, msg, conn) -> outgoingMessages.add(new OutgoingMessage(cap, msg)));
     ethPeers.registerConnection(peerConnection, peerValidators);
     final EthPeer peer = ethPeers.peer(peerConnection);
-    peer.registerStatusReceived(chainHeadHash, totalDifficulty);
+    peer.registerStatusReceived(chainHeadHash, totalDifficulty, 63);
     estimatedHeight.ifPresent(height -> peer.chainState().update(chainHeadHash, height));
     peer.registerStatusSent();
 

@@ -16,23 +16,30 @@ package org.hyperledger.besu;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hyperledger.besu.ethereum.privacy.PrivateStateRootResolver.EMPTY_ROOT_HASH;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
 import org.hyperledger.besu.controller.BesuController;
-import org.hyperledger.besu.controller.GasLimitCalculator;
+import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.NodeKeyUtils;
-import org.hyperledger.besu.crypto.SECP256K1;
+import org.hyperledger.besu.crypto.SignatureAlgorithm;
+import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.enclave.Enclave;
 import org.hyperledger.besu.enclave.EnclaveFactory;
+import org.hyperledger.besu.enclave.types.PrivacyGroup;
 import org.hyperledger.besu.enclave.types.SendResponse;
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.blockcreation.GasLimitCalculator;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.core.Address;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.Hash;
-import org.hyperledger.besu.ethereum.core.InMemoryStorageProvider;
+import org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider;
+import org.hyperledger.besu.ethereum.core.InMemoryPrivacyStorageProvider;
 import org.hyperledger.besu.ethereum.core.LogsBloomFilter;
 import org.hyperledger.besu.ethereum.core.MiningParametersTestBuilder;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
@@ -42,21 +49,16 @@ import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
+import org.hyperledger.besu.ethereum.privacy.DefaultPrivacyController;
 import org.hyperledger.besu.ethereum.privacy.PrivateStateRootResolver;
 import org.hyperledger.besu.ethereum.privacy.PrivateTransaction;
 import org.hyperledger.besu.ethereum.privacy.Restriction;
 import org.hyperledger.besu.ethereum.privacy.storage.PrivacyGroupHeadBlockMap;
 import org.hyperledger.besu.ethereum.privacy.storage.PrivacyStorageProvider;
 import org.hyperledger.besu.ethereum.privacy.storage.PrivateStateStorage;
-import org.hyperledger.besu.ethereum.privacy.storage.keyvalue.PrivacyKeyValueStorageProviderBuilder;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
-import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueSegmentIdentifier;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
-import org.hyperledger.besu.plugin.services.storage.rocksdb.RocksDBKeyValuePrivacyStorageFactory;
-import org.hyperledger.besu.plugin.services.storage.rocksdb.RocksDBKeyValueStorageFactory;
-import org.hyperledger.besu.plugin.services.storage.rocksdb.RocksDBMetricsFactory;
-import org.hyperledger.besu.plugin.services.storage.rocksdb.configuration.RocksDBFactoryConfiguration;
-import org.hyperledger.besu.services.BesuConfigurationImpl;
+import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.testutil.TestClock;
 import org.hyperledger.orion.testutil.OrionKeyConfiguration;
 import org.hyperledger.orion.testutil.OrionTestHarness;
@@ -66,11 +68,13 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -81,28 +85,30 @@ import org.junit.rules.TemporaryFolder;
 
 @SuppressWarnings("rawtypes")
 public class PrivacyReorgTest {
-  private static final int MAX_OPEN_FILES = 1024;
-  private static final long CACHE_CAPACITY = 8388608;
-  private static final int MAX_BACKGROUND_COMPACTIONS = 4;
-  private static final int BACKGROUND_THREAD_COUNT = 4;
-
   @Rule public final TemporaryFolder folder = new TemporaryFolder();
 
-  private static final SECP256K1.KeyPair KEY_PAIR =
-      SECP256K1.KeyPair.create(
-          SECP256K1.PrivateKey.create(
-              new BigInteger(
-                  "8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63", 16)));
+  private static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
+      Suppliers.memoize(SignatureAlgorithmFactory::getInstance);
+
+  private static final KeyPair KEY_PAIR =
+      SIGNATURE_ALGORITHM
+          .get()
+          .createKeyPair(
+              SIGNATURE_ALGORITHM
+                  .get()
+                  .createPrivateKey(
+                      new BigInteger(
+                          "8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63", 16)));
   private static final Bytes ENCLAVE_PUBLIC_KEY =
       Bytes.fromBase64String("A1aVtMxLCUHmBVHXoZzzBgPbW/wj5axDpW9X8l91SGo=");
 
   private static final String FIRST_BLOCK_WITH_NO_TRANSACTIONS_STATE_ROOT =
-      "0x1bdf13f6d14c7322d6e695498aab258949e55574bef7eac366eb777f43d7dd2b";
+      "0xe368938a01d983e331eb0e4ea61224726d06075c1ad525569b369f664067ff26";
   private static final String FIRST_BLOCK_WITH_SINGLE_TRANSACTION_STATE_ROOT =
-      "0x16979b290f429e06d86a43584c7d8689d4292ade9a602e5c78e2867c6ebd904e";
+      "0x9c88988f9602184efc538cf1c2f482a6b8757ff918d234602884dc8e3b983edd";
   private static final String BLOCK_WITH_SINGLE_TRANSACTION_RECEIPTS_ROOT =
       "0xc8267b3f9ed36df3ff8adb51a6d030716f23eeb50270e7fce8d9822ffa7f0461";
-  private static final String STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE =
+  private static final String STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMPTY_STATE =
       "0x2121b68f1333e93bae8cd717a3ca68c9d7e7003f6b288c36dfc59b0f87be9590";
   private static final Bytes32 PRIVACY_GROUP_BYTES32 =
       Bytes32.fromHexString("0xf250d523ae9164722b06ca25cfa2a7f3c45df96b09e215236f886c876f715bfa");
@@ -130,6 +136,7 @@ public class PrivacyReorgTest {
   private OrionTestHarness enclave;
   private PrivateStateRootResolver privateStateRootResolver;
   private PrivacyParameters privacyParameters;
+  private DefaultPrivacyController privacyController;
 
   @Before
   public void setUp() throws IOException {
@@ -142,17 +149,19 @@ public class PrivacyReorgTest {
 
     // Create Storage
     final Path dataDir = folder.newFolder().toPath();
-    final Path dbDir = dataDir.resolve("database");
 
     // Configure Privacy
     privacyParameters =
         new PrivacyParameters.Builder()
             .setEnabled(true)
-            .setStorageProvider(createKeyValueStorageProvider(dataDir, dbDir))
+            .setStorageProvider(createKeyValueStorageProvider())
             .setEnclaveUrl(enclave.clientUrl())
             .setEnclaveFactory(new EnclaveFactory(Vertx.vertx()))
             .build();
     privacyParameters.setEnclavePublicKey(ENCLAVE_PUBLIC_KEY.toBase64String());
+    privacyController = mock(DefaultPrivacyController.class);
+    when(privacyController.findOffChainPrivacyGroupByGroupId(any(), any()))
+        .thenReturn(Optional.of(new PrivacyGroup()));
 
     privateStateRootResolver =
         new PrivateStateRootResolver(privacyParameters.getPrivateStateStorage());
@@ -162,7 +171,7 @@ public class PrivacyReorgTest {
             .fromGenesisConfig(GenesisConfigFile.development())
             .synchronizerConfiguration(SynchronizerConfiguration.builder().build())
             .ethProtocolConfiguration(EthProtocolConfiguration.defaultConfig())
-            .storageProvider(new InMemoryStorageProvider())
+            .storageProvider(new InMemoryKeyValueStorageProvider())
             .networkId(BigInteger.ONE)
             .miningParameters(new MiningParametersTestBuilder().enabled(false).build())
             .nodeKey(NodeKeyUtils.generate())
@@ -170,8 +179,8 @@ public class PrivacyReorgTest {
             .dataDirectory(dataDir)
             .clock(TestClock.fixed())
             .privacyParameters(privacyParameters)
-            .transactionPoolConfiguration(TransactionPoolConfiguration.builder().build())
-            .targetGasLimit(GasLimitCalculator.DEFAULT)
+            .transactionPoolConfiguration(TransactionPoolConfiguration.DEFAULT)
+            .gasLimitCalculator(GasLimitCalculator.constant())
             .build();
   }
 
@@ -234,7 +243,7 @@ public class PrivacyReorgTest {
 
     // Check that the private state root is not the empty state
     assertPrivateStateRoot(
-        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE);
+        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMPTY_STATE);
 
     // Create parallel fork of length 1 which removes privacy marker transaction
     final Block forkBlock =
@@ -262,7 +271,7 @@ public class PrivacyReorgTest {
         gen.block(getBlockOptionsNoTransaction(blockchain.getGenesisBlock(), firstBlockStateRoot));
 
     final String secondBlockStateRoot =
-        "0x35c315ee7d272e5b612d454ee87c948657310ab33208b57122f8d0525e91f35e";
+        "0x7e887f91d2a6205f4a643701aba022c2db0bac5ab235102ab7477edd7a8a4317";
     final Block secondBlock =
         gen.block(
             getBlockOptionsWithTransaction(
@@ -277,7 +286,7 @@ public class PrivacyReorgTest {
 
     // Check that the private state root is not the empty state
     assertPrivateStateRoot(
-        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE);
+        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMPTY_STATE);
 
     // Create parallel fork of length 1 which removes privacy marker transaction
     final Difficulty remainingDifficultyToOutpace =
@@ -289,7 +298,7 @@ public class PrivacyReorgTest {
             .plus(blockchain.getBlockByNumber(2).get().getHeader().getDifficulty());
 
     final String forkBlockStateRoot =
-        "0x4a33bdf9d16e6dd4f4c67f1638971f663f132ebceac0c7c65c9a3f35172af4de";
+        "0x486b886bde6472e8d706f8eb4fb6378ebbdceb4848a5a8d69a726575b22e41b6";
     final Block forkBlock =
         gen.block(
             getBlockOptionsNoTransactionWithDifficulty(
@@ -324,7 +333,7 @@ public class PrivacyReorgTest {
 
     // Check that the private state root is not the empty state
     assertPrivateStateRoot(
-        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE);
+        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMPTY_STATE);
 
     // Create parallel fork of length 1 which removes privacy marker transaction
     final Block forkBlock =
@@ -336,10 +345,10 @@ public class PrivacyReorgTest {
 
     // Check that the private state root did not change
     assertPrivateStateRoot(
-        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE);
+        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMPTY_STATE);
 
     final String secondForkBlockStateRoot =
-        "0xd35eea814b8b5a0b12e690ab320785f3a33d9685bbf6875637c40a64203915da";
+        "0x2c37a360a700c614b10c980138f64be9ad66fc4a14cd5145199cd0d8ec43d51d";
     final Block secondForkBlock =
         gen.block(
             getBlockOptionsNoTransactionWithDifficulty(
@@ -357,7 +366,7 @@ public class PrivacyReorgTest {
 
     // Add another private transaction
     final String thirdForkBlockStateRoot =
-        "0xe22344ade05260177b79dcc6c4fed8f87ab95a506c2a6147631ac6547cf44846";
+        "0x8fe42678733e6099e7b10b9b1d4684b8f2ce3d6479cb122ea12932ef304a1793";
     final Block thirdForkBlock =
         gen.block(
             getBlockOptionsWithTransactionAndDifficulty(
@@ -369,8 +378,7 @@ public class PrivacyReorgTest {
     appendBlock(besuController, blockchain, protocolContext, thirdForkBlock);
 
     // Check that the private state did change after reorg
-    assertPrivateStateRoot(
-        privateStateRootResolver, blockchain, STATE_ROOT_AFTER_TRANSACTION_APPENDED_TO_EMTPY_STATE);
+    assertPrivateStateRoot(privateStateRootResolver, blockchain, EMPTY_ROOT_HASH);
   }
 
   @SuppressWarnings("unchecked")
@@ -386,23 +394,8 @@ public class PrivacyReorgTest {
         .importBlock(protocolContext, block, HeaderValidationMode.NONE);
   }
 
-  private PrivacyStorageProvider createKeyValueStorageProvider(
-      final Path dataLocation, final Path dbLocation) {
-    return new PrivacyKeyValueStorageProviderBuilder()
-        .withStorageFactory(
-            new RocksDBKeyValuePrivacyStorageFactory(
-                new RocksDBKeyValueStorageFactory(
-                    () ->
-                        new RocksDBFactoryConfiguration(
-                            MAX_OPEN_FILES,
-                            MAX_BACKGROUND_COMPACTIONS,
-                            BACKGROUND_THREAD_COUNT,
-                            CACHE_CAPACITY),
-                    Arrays.asList(KeyValueSegmentIdentifier.values()),
-                    RocksDBMetricsFactory.PRIVATE_ROCKS_DB_METRICS)))
-        .withCommonConfiguration(new BesuConfigurationImpl(dataLocation, dbLocation))
-        .withMetricsSystem(new NoOpMetricsSystem())
-        .build();
+  private PrivacyStorageProvider createKeyValueStorageProvider() {
+    return new InMemoryPrivacyStorageProvider();
   }
 
   private Bytes getEnclaveKey(final URI enclaveURI) {
@@ -450,6 +443,7 @@ public class PrivacyReorgTest {
 
   private Transaction buildMarkerTransaction(final Bytes payload) {
     return Transaction.builder()
+        .type(TransactionType.FRONTIER)
         .chainId(BigInteger.valueOf(2018))
         .gasLimit(60000)
         .gasPrice(Wei.of(1000))

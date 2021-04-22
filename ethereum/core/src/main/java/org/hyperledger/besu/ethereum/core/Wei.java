@@ -18,7 +18,7 @@ import org.hyperledger.besu.plugin.data.Quantity;
 
 import java.math.BigInteger;
 
-import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.BaseUInt256Value;
 import org.apache.tuweni.units.bigints.UInt256;
 
@@ -26,6 +26,8 @@ import org.apache.tuweni.units.bigints.UInt256;
 public final class Wei extends BaseUInt256Value<Wei> implements Quantity {
 
   public static final Wei ZERO = of(0);
+
+  public static final Wei ONE = of(1);
 
   Wei(final UInt256 value) {
     super(value, Wei::new);
@@ -55,7 +57,11 @@ public final class Wei extends BaseUInt256Value<Wei> implements Quantity {
     return new Wei(value);
   }
 
-  public static Wei wrap(final Bytes32 value) {
+  public static Wei ofNumber(final Number value) {
+    return new Wei((BigInteger) value);
+  }
+
+  public static Wei wrap(final Bytes value) {
     return new Wei(UInt256.fromBytes(value));
   }
 

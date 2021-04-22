@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.vm.operations;
 
-import org.hyperledger.besu.ethereum.mainnet.ConstantinopleFixGasCalculator;
+import org.hyperledger.besu.ethereum.mainnet.PetersburgGasCalculator;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.ethereum.vm.MessageFrame;
 
@@ -44,7 +44,7 @@ public class BlockHashOperationBenchmark {
   @Setup
   public void prepare() throws Exception {
     operationBenchmarkHelper = OperationBenchmarkHelper.create();
-    operation = new BlockHashOperation(new ConstantinopleFixGasCalculator());
+    operation = new BlockHashOperation(new PetersburgGasCalculator());
     frame = operationBenchmarkHelper.createMessageFrame();
   }
 
@@ -56,7 +56,7 @@ public class BlockHashOperationBenchmark {
   @Benchmark
   public Bytes32 executeOperation() {
     frame.pushStackItem(UInt256.valueOf(blockNumber).toBytes());
-    operation.execute(frame);
+    operation.execute(frame, null);
     return frame.popStackItem();
   }
 
@@ -68,7 +68,7 @@ public class BlockHashOperationBenchmark {
             .blockHashLookup(new BlockHashLookup(frame.getBlockHeader(), frame.getBlockchain()))
             .build();
     cleanFrame.pushStackItem(UInt256.valueOf(blockNumber).toBytes());
-    operation.execute(cleanFrame);
+    operation.execute(cleanFrame, null);
     return cleanFrame.popStackItem();
   }
 }

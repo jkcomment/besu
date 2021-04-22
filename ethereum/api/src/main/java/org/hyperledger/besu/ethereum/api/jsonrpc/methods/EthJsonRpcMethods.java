@@ -33,6 +33,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetCode;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetFilterChanges;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetFilterLogs;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetLogs;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetMinerDataByBlockHash;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetMinerDataByBlockNumber;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetProof;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetStorageAt;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.EthGetTransactionByBlockHashAndIndex;
@@ -61,6 +63,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.JsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
+import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -81,6 +84,7 @@ public class EthJsonRpcMethods extends ApiGroupJsonRpcMethods {
   private final TransactionPool transactionPool;
   private final MiningCoordinator miningCoordinator;
   private final Set<Capability> supportedCapabilities;
+  private final PrivacyParameters privacyParameters;
 
   public EthJsonRpcMethods(
       final BlockchainQueries blockchainQueries,
@@ -89,7 +93,8 @@ public class EthJsonRpcMethods extends ApiGroupJsonRpcMethods {
       final FilterManager filterManager,
       final TransactionPool transactionPool,
       final MiningCoordinator miningCoordinator,
-      final Set<Capability> supportedCapabilities) {
+      final Set<Capability> supportedCapabilities,
+      final PrivacyParameters privacyParameters) {
     this.blockchainQueries = blockchainQueries;
     this.synchronizer = synchronizer;
     this.protocolSchedule = protocolSchedule;
@@ -97,6 +102,7 @@ public class EthJsonRpcMethods extends ApiGroupJsonRpcMethods {
     this.transactionPool = transactionPool;
     this.miningCoordinator = miningCoordinator;
     this.supportedCapabilities = supportedCapabilities;
+    this.privacyParameters = privacyParameters;
   }
 
   @Override
@@ -119,7 +125,8 @@ public class EthJsonRpcMethods extends ApiGroupJsonRpcMethods {
             new TransactionSimulator(
                 blockchainQueries.getBlockchain(),
                 blockchainQueries.getWorldStateArchive(),
-                protocolSchedule)),
+                protocolSchedule,
+                privacyParameters)),
         new EthGetCode(blockchainQueries),
         new EthGetLogs(blockchainQueries),
         new EthGetProof(blockchainQueries),
@@ -147,15 +154,18 @@ public class EthJsonRpcMethods extends ApiGroupJsonRpcMethods {
             new TransactionSimulator(
                 blockchainQueries.getBlockchain(),
                 blockchainQueries.getWorldStateArchive(),
-                protocolSchedule)),
+                protocolSchedule,
+                privacyParameters)),
         new EthMining(miningCoordinator),
         new EthCoinbase(miningCoordinator),
         new EthProtocolVersion(supportedCapabilities),
-        new EthGasPrice(miningCoordinator),
+        new EthGasPrice(blockchainQueries, miningCoordinator),
         new EthGetWork(miningCoordinator),
         new EthSubmitWork(miningCoordinator),
         new EthHashrate(miningCoordinator),
         new EthSubmitHashRate(miningCoordinator),
-        new EthChainId(protocolSchedule.getChainId()));
+        new EthChainId(protocolSchedule.getChainId()),
+        new EthGetMinerDataByBlockHash(blockchainQueries, protocolSchedule),
+        new EthGetMinerDataByBlockNumber(blockchainQueries, protocolSchedule));
   }
 }

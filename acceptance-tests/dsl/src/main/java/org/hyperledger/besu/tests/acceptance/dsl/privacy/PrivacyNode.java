@@ -51,7 +51,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Vertx;
@@ -70,8 +69,8 @@ public class PrivacyNode implements AutoCloseable {
   private final OrionTestHarness orion;
   private final BesuNode besu;
   private final Vertx vertx;
-  private final Integer privacyAddress;
   private final boolean isOnchainPrivacyEnabled;
+  private final boolean isMultitenancyEnabled;
 
   public PrivacyNode(final PrivacyNodeConfiguration privacyConfiguration, final Vertx vertx)
       throws IOException {
@@ -81,8 +80,8 @@ public class PrivacyNode implements AutoCloseable {
 
     final BesuNodeConfiguration besuConfig = privacyConfiguration.getBesuConfig();
 
-    privacyAddress = privacyConfiguration.getPrivacyAddress();
     isOnchainPrivacyEnabled = privacyConfiguration.isOnchainPrivacyGroupEnabled();
+    isMultitenancyEnabled = privacyConfiguration.isMultitenancyEnabled();
 
     this.besu =
         new BesuNode(
@@ -95,6 +94,7 @@ public class PrivacyNode implements AutoCloseable {
             besuConfig.getPermissioningConfiguration(),
             besuConfig.getKeyFilePath(),
             besuConfig.isDevMode(),
+            besuConfig.getNetwork(),
             besuConfig.getGenesisConfigProvider(),
             besuConfig.isP2pEnabled(),
             besuConfig.getNetworkingConfiguration(),
@@ -106,8 +106,9 @@ public class PrivacyNode implements AutoCloseable {
             besuConfig.getPlugins(),
             besuConfig.getExtraCLIOptions(),
             Collections.emptyList(),
+            besuConfig.isDnsEnabled(),
             besuConfig.getPrivacyParameters(),
-            Optional.empty());
+            List.of());
   }
 
   public void testOrionConnection(final List<PrivacyNode> otherNodes) {
@@ -177,10 +178,10 @@ public class PrivacyNode implements AutoCloseable {
               .setStorageProvider(createKeyValueStorageProvider(dataDir, dbDir))
               .setPrivateKeyPath(KeyPairUtil.getDefaultKeyFile(besu.homeDirectory()).toPath())
               .setEnclaveFactory(new EnclaveFactory(vertx))
-              .setPrivacyAddress(privacyAddress)
               .setOnchainPrivacyGroupsEnabled(isOnchainPrivacyEnabled)
+              .setMultiTenancyEnabled(isMultitenancyEnabled)
               .build();
-    } catch (IOException e) {
+    } catch (final IOException e) {
       throw new RuntimeException();
     }
     besu.setPrivacyParameters(privacyParameters);

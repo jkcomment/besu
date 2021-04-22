@@ -22,7 +22,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import org.hyperledger.besu.crypto.SECP256K1.KeyPair;
+import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
@@ -42,9 +42,9 @@ import org.hyperledger.besu.ethereum.eth.manager.ForkIdManager;
 import org.hyperledger.besu.ethereum.eth.manager.RespondingEthPeer;
 import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions.TransactionAddedStatus;
+import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
-import org.hyperledger.besu.ethereum.mainnet.TransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
@@ -57,6 +57,7 @@ import java.util.Optional;
 
 import org.junit.Test;
 
+@SuppressWarnings("unchecked")
 public class TransactionPoolFactoryTest {
 
   @Test
@@ -89,12 +90,13 @@ public class TransactionPoolFactoryTest {
             new NoOpMetricsSystem(),
             state,
             Wei.of(1),
-            new TransactionPoolConfiguration(
+            ImmutableTransactionPoolConfiguration.of(
                 1,
                 1,
                 1,
                 1,
                 TransactionPoolConfiguration.DEFAULT_PRICE_BUMP,
+                TransactionPoolConfiguration.ETH65_TRX_ANNOUNCED_BUFFERING_PERIOD,
                 TransactionPoolConfiguration.DEFAULT_RPC_TX_FEE_CAP),
             pendingTransactions,
             peerTransactionTracker,
@@ -110,7 +112,7 @@ public class TransactionPoolFactoryTest {
             BigInteger.ONE,
             mock(WorldStateArchive.class),
             pool,
-            new EthProtocolConfiguration(5, 5, 5, 5, 5, true),
+            new EthProtocolConfiguration(5, 5, 5, 5, 5, true, false),
             ethPeers,
             mock(EthMessages.class),
             ethContext,
@@ -144,7 +146,8 @@ public class TransactionPoolFactoryTest {
     final SyncState state = mock(SyncState.class);
     final TransactionsMessageSender transactionsMessageSender =
         mock(TransactionsMessageSender.class);
-    final TransactionValidator transactionValidator = mock(TransactionValidator.class);
+    final MainnetTransactionValidator transactionValidator =
+        mock(MainnetTransactionValidator.class);
     final WorldState worldState = mock(WorldState.class);
     final WorldStateArchive worldStateArchive = mock(WorldStateArchive.class);
 
@@ -159,10 +162,11 @@ public class TransactionPoolFactoryTest {
     when(pendingTransactions.addLocalTransaction(any())).thenReturn(TransactionAddedStatus.ADDED);
     when(protocolSpec.getTransactionValidator()).thenReturn(transactionValidator);
     when(schedule.getByBlockNumber(anyLong())).thenReturn(protocolSpec);
-    when(transactionValidator.validate(any())).thenReturn(ValidationResult.valid());
+    when(transactionValidator.validate(any(), any(Optional.class)))
+        .thenReturn(ValidationResult.valid());
     when(transactionValidator.validateForSender(any(), any(), any()))
         .thenReturn(ValidationResult.valid());
-    when(worldStateArchive.get(any())).thenReturn(Optional.of(worldState));
+    when(worldStateArchive.get(any(), any())).thenReturn(Optional.of(worldState));
 
     final TransactionPool pool =
         TransactionPoolFactory.createTransactionPool(
@@ -172,12 +176,13 @@ public class TransactionPoolFactoryTest {
             new NoOpMetricsSystem(),
             state,
             Wei.of(1),
-            new TransactionPoolConfiguration(
+            ImmutableTransactionPoolConfiguration.of(
                 1,
                 1,
                 1,
                 1,
                 TransactionPoolConfiguration.DEFAULT_PRICE_BUMP,
+                TransactionPoolConfiguration.ETH65_TRX_ANNOUNCED_BUFFERING_PERIOD,
                 TransactionPoolConfiguration.DEFAULT_RPC_TX_FEE_CAP),
             pendingTransactions,
             peerTransactionTracker,
@@ -193,7 +198,7 @@ public class TransactionPoolFactoryTest {
             BigInteger.ONE,
             mock(WorldStateArchive.class),
             pool,
-            new EthProtocolConfiguration(5, 5, 5, 5, 5, true),
+            new EthProtocolConfiguration(5, 5, 5, 5, 5, true, false),
             ethPeers,
             mock(EthMessages.class),
             ethContext,
@@ -211,7 +216,7 @@ public class TransactionPoolFactoryTest {
             .nonce(1)
             .gasLimit(0)
             .gasPrice(Wei.of(1))
-            .createTransaction(KeyPair.generate());
+            .createTransaction(SignatureAlgorithmFactory.getInstance().generateKeyPair());
     pool.addLocalTransaction(transaction);
   }
 }

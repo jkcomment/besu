@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.permissioning;
 
+import org.hyperledger.besu.ethereum.chain.Blockchain;
+import org.hyperledger.besu.ethereum.core.Address;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
 import org.hyperledger.besu.ethereum.p2p.peers.EnodeURL;
 import org.hyperledger.besu.ethereum.permissioning.node.NodePermissioningController;
@@ -41,9 +43,10 @@ public class NodePermissioningControllerFactory {
       final Collection<EnodeURL> fixedNodes,
       final Bytes localNodeId,
       final TransactionSimulator transactionSimulator,
-      final MetricsSystem metricsSystem) {
+      final MetricsSystem metricsSystem,
+      final Blockchain blockchain) {
 
-    Optional<SyncStatusNodePermissioningProvider> syncStatusProviderOptional;
+    final Optional<SyncStatusNodePermissioningProvider> syncStatusProviderOptional;
 
     List<NodePermissioningProvider> providers = new ArrayList<>();
     if (permissioningConfiguration.getLocalConfig().isPresent()) {
@@ -60,17 +63,14 @@ public class NodePermissioningControllerFactory {
       }
     }
 
-    if (permissioningConfiguration.getSmartContractConfig().isPresent()) {
-      SmartContractPermissioningConfiguration smartContractPermissioningConfiguration =
-          permissioningConfiguration.getSmartContractConfig().get();
-      if (smartContractPermissioningConfiguration.isSmartContractNodeAllowlistEnabled()) {
-        NodeSmartContractPermissioningController smartContractProvider =
-            new NodeSmartContractPermissioningController(
-                smartContractPermissioningConfiguration.getNodeSmartContractAddress(),
-                transactionSimulator,
-                metricsSystem);
-        providers.add(smartContractProvider);
-      }
+    if (permissioningConfiguration.getSmartContractConfig().isPresent()
+        && permissioningConfiguration
+            .getSmartContractConfig()
+            .get()
+            .isSmartContractNodeAllowlistEnabled()) {
+
+      configureNodePermissioningSmartContractProvider(
+          permissioningConfiguration, transactionSimulator, metricsSystem, providers);
 
       if (fixedNodes.isEmpty()) {
         syncStatusProviderOptional = Optional.empty();
@@ -83,16 +83,72 @@ public class NodePermissioningControllerFactory {
       syncStatusProviderOptional = Optional.empty();
     }
 
-    NodePermissioningController nodePermissioningController =
-        new NodePermissioningController(syncStatusProviderOptional, providers);
+    final Optional<GoQuorumQip714Gate> goQuorumQip714Gate =
+        permissioningConfiguration
+            .getQuorumPermissioningConfig()
+            .flatMap(
+                config -> {
+                  if (config.isEnabled()) {
+                    return Optional.of(
+                        GoQuorumQip714Gate.getInstance(config.getQip714Block(), blockchain));
+                  } else {
+                    return Optional.empty();
+                  }
+                });
 
-    validatePermissioningContract(nodePermissioningController);
+    final NodePermissioningController nodePermissioningController =
+        new NodePermissioningController(syncStatusProviderOptional, providers, goQuorumQip714Gate);
+
+    permissioningConfiguration
+        .getSmartContractConfig()
+        .ifPresent(
+            config -> {
+              if (config.isSmartContractNodeAllowlistEnabled()) {
+                validatePermissioningContract(
+                    nodePermissioningController,
+                    permissioningConfiguration.getSmartContractConfig().get());
+              }
+            });
 
     return nodePermissioningController;
   }
 
+  private void configureNodePermissioningSmartContractProvider(
+      final PermissioningConfiguration permissioningConfiguration,
+      final TransactionSimulator transactionSimulator,
+      final MetricsSystem metricsSystem,
+      final List<NodePermissioningProvider> providers) {
+    final SmartContractPermissioningConfiguration smartContractPermissioningConfig =
+        permissioningConfiguration.getSmartContractConfig().get();
+    final Address nodePermissioningSmartContractAddress =
+        smartContractPermissioningConfig.getNodeSmartContractAddress();
+
+    final NodePermissioningProvider smartContractProvider;
+    switch (smartContractPermissioningConfig.getNodeSmartContractInterfaceVersion()) {
+      case 1:
+        {
+          smartContractProvider =
+              new NodeSmartContractPermissioningController(
+                  nodePermissioningSmartContractAddress, transactionSimulator, metricsSystem);
+          break;
+        }
+      case 2:
+        {
+          smartContractProvider =
+              new NodeSmartContractV2PermissioningController(
+                  nodePermissioningSmartContractAddress, transactionSimulator, metricsSystem);
+          break;
+        }
+      default:
+        throw new IllegalStateException(
+            "Invalid node Smart contract permissioning interface version");
+    }
+    providers.add(smartContractProvider);
+  }
+
   private void validatePermissioningContract(
-      final NodePermissioningController nodePermissioningController) {
+      final NodePermissioningController nodePermissioningController,
+      final SmartContractPermissioningConfiguration smartContractPermissioningConfig) {
     LOG.debug("Validating onchain node permissioning smart contract configuration");
 
     try {
@@ -103,8 +159,11 @@ public class NodePermissioningControllerFactory {
           EnodeURL.fromString(
               "enode://6f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec012937307647bd3b9a82abe2974e1407241d54947bbb39763a4cac9f77166ad92a0@10.3.58.6:30303"));
     } catch (Exception e) {
-      final String msg = "Error validating onchain node permissioning smart contract configuration";
-      LOG.error(msg + ":", e);
+      final String msg =
+          String.format(
+              "Error: node permissioning contract at address %s does not match the expected interface version %s.",
+              smartContractPermissioningConfig.getNodeSmartContractAddress(),
+              smartContractPermissioningConfig.getNodeSmartContractInterfaceVersion());
       throw new IllegalStateException(msg, e);
     }
   }

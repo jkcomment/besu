@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.core;
 
-import static org.hyperledger.besu.ethereum.core.InMemoryStorageProvider.createInMemoryWorldStateArchive;
+import static org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider.createInMemoryWorldStateArchive;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
 import org.hyperledger.besu.config.StubGenesisConfigOptions;
@@ -25,6 +25,7 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -43,11 +44,11 @@ public class ExecutionContextTestFixture {
 
   private final ProtocolSchedule protocolSchedule;
   private final ProtocolContext protocolContext;
+  private static final GenesisConfigFile genesisConfigFile = GenesisConfigFile.mainnet();
 
   private ExecutionContextTestFixture(
       final ProtocolSchedule protocolSchedule, final KeyValueStorage keyValueStorage) {
-    final GenesisState genesisState =
-        GenesisState.fromConfig(GenesisConfigFile.mainnet(), protocolSchedule);
+    final GenesisState genesisState = GenesisState.fromConfig(genesisConfigFile, protocolSchedule);
     this.genesis = genesisState.getBlock();
     this.keyValueStorage = keyValueStorage;
     this.blockchain =
@@ -55,7 +56,8 @@ public class ExecutionContextTestFixture {
             genesis,
             new KeyValueStoragePrefixedKeyBlockchainStorage(
                 keyValueStorage, new MainnetBlockHeaderFunctions()),
-            new NoOpMetricsSystem());
+            new NoOpMetricsSystem(),
+            0);
     this.stateArchive = createInMemoryWorldStateArchive();
     this.protocolSchedule = protocolSchedule;
     this.protocolContext = new ProtocolContext(blockchain, stateArchive, null);
@@ -113,11 +115,12 @@ public class ExecutionContextTestFixture {
       if (protocolSchedule == null) {
         protocolSchedule =
             new ProtocolScheduleBuilder(
-                    new StubGenesisConfigOptions().constantinopleFixBlock(0),
+                    new StubGenesisConfigOptions().petersburgBlock(0),
                     BigInteger.valueOf(42),
-                    Function.identity(),
+                    ProtocolSpecAdapters.create(0, Function.identity()),
                     new PrivacyParameters(),
-                    false)
+                    false,
+                    genesisConfigFile.getConfigOptions().isQuorum())
                 .createProtocolSchedule();
       }
       if (keyValueStorage == null) {

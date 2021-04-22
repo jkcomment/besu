@@ -19,8 +19,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.config.experimental.ExperimentalEIPs;
-import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.plugin.data.TransactionType;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -34,12 +34,8 @@ import org.junit.runners.Parameterized;
 @RunWith(Parameterized.class)
 public class TransactionGasBudgetCalculatorTest {
 
-  private static final long EIP_1559_FORK_BLOCK = 1L;
   private static final TransactionGasBudgetCalculator FRONTIER_CALCULATOR =
       TransactionGasBudgetCalculator.frontier();
-  private static final TransactionGasBudgetCalculator EIP1559_CALCULATOR =
-      TransactionGasBudgetCalculator.eip1559(new EIP1559(EIP_1559_FORK_BLOCK));
-  private static final FeeMarket FEE_MARKET = FeeMarket.eip1559();
 
   private final TransactionGasBudgetCalculator gasBudgetCalculator;
   private final boolean isEIP1559;
@@ -68,84 +64,12 @@ public class TransactionGasBudgetCalculatorTest {
 
   @Parameterized.Parameters
   public static Collection<Object[]> data() {
+
     return Arrays.asList(
         new Object[][] {
           {FRONTIER_CALCULATOR, false, 5L, 1L, 10L, 0L, true},
           {FRONTIER_CALCULATOR, false, 11L, 1L, 10L, 0L, false},
           {FRONTIER_CALCULATOR, false, 5L, 1L, 10L, 6L, false},
-          {EIP1559_CALCULATOR, false, 5L, EIP_1559_FORK_BLOCK, 10L, 0L, true},
-          {
-            EIP1559_CALCULATOR,
-            false,
-            (FEE_MARKET.getMaxGas() / 2) + 1,
-            1L,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            false
-          },
-          {
-            EIP1559_CALCULATOR,
-            false,
-            (FEE_MARKET.getMaxGas() / 2) - 1,
-            EIP_1559_FORK_BLOCK,
-            10L,
-            2L,
-            false
-          },
-          {
-            EIP1559_CALCULATOR,
-            true,
-            (FEE_MARKET.getMaxGas() / 2) + 1,
-            EIP_1559_FORK_BLOCK,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            false
-          },
-          {
-            EIP1559_CALCULATOR,
-            true,
-            (FEE_MARKET.getMaxGas() / 2) - 1,
-            EIP_1559_FORK_BLOCK,
-            10L,
-            2L,
-            false
-          },
-          {
-            EIP1559_CALCULATOR,
-            true,
-            (FEE_MARKET.getMaxGas() / 2) + FEE_MARKET.getGasIncrementAmount(),
-            EIP_1559_FORK_BLOCK + 1,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            true
-          },
-          {
-            EIP1559_CALCULATOR,
-            true,
-            (FEE_MARKET.getMaxGas() / 2) + FEE_MARKET.getGasIncrementAmount() + 1,
-            EIP_1559_FORK_BLOCK + 1,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            false
-          },
-          {
-            EIP1559_CALCULATOR,
-            false,
-            (FEE_MARKET.getMaxGas() / 2) - FEE_MARKET.getGasIncrementAmount(),
-            EIP_1559_FORK_BLOCK + 1,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            true
-          },
-          {
-            EIP1559_CALCULATOR,
-            false,
-            (FEE_MARKET.getMaxGas() / 2) - FEE_MARKET.getGasIncrementAmount() + 1,
-            EIP_1559_FORK_BLOCK + 1,
-            FEE_MARKET.getMaxGas(),
-            0L,
-            false
-          }
         });
   }
 
@@ -164,21 +88,19 @@ public class TransactionGasBudgetCalculatorTest {
     assertThat(
             gasBudgetCalculator.hasBudget(
                 transaction(isEIP1559, transactionGasLimit),
-                blockHeader(blockNumber, blockHeaderGasLimit),
+                blockNumber,
+                blockHeaderGasLimit,
                 gasUsed))
         .isEqualTo(expectedHasBudget);
   }
 
-  private BlockHeader blockHeader(final long blockNumber, final long gasLimit) {
-    final BlockHeader blockHeader = mock(BlockHeader.class);
-    when(blockHeader.getNumber()).thenReturn(blockNumber);
-    when(blockHeader.getGasLimit()).thenReturn(gasLimit);
-    return blockHeader;
-  }
-
   private Transaction transaction(final boolean isEIP1559, final long gasLimit) {
     final Transaction transaction = mock(Transaction.class);
-    when(transaction.isEIP1559Transaction()).thenReturn(isEIP1559);
+    if (isEIP1559) {
+      when(transaction.getType()).thenReturn(TransactionType.EIP1559);
+    } else {
+      when(transaction.getType()).thenReturn(TransactionType.FRONTIER);
+    }
     when(transaction.getGasLimit()).thenReturn(gasLimit);
     return transaction;
   }

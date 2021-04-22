@@ -19,7 +19,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.JsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.blockcreation.EthHashBlockCreator;
+import org.hyperledger.besu.ethereum.blockcreation.GasLimitCalculator;
+import org.hyperledger.besu.ethereum.blockcreation.PoWBlockCreator;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockImporter;
@@ -28,8 +29,6 @@ import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.retesteth.RetestethClock;
 import org.hyperledger.besu.ethereum.retesteth.RetestethContext;
-
-import com.google.common.base.Functions;
 
 public class TestMineBlocks implements JsonRpcMethod {
   private final RetestethContext context;
@@ -61,14 +60,14 @@ public class TestMineBlocks implements JsonRpcMethod {
     final ProtocolContext protocolContext = context.getProtocolContext();
     final MutableBlockchain blockchain = context.getBlockchain();
     final HeaderValidationMode headerValidationMode = context.getHeaderValidationMode();
-    final EthHashBlockCreator blockCreator =
-        new EthHashBlockCreator(
+    final PoWBlockCreator blockCreator =
+        new PoWBlockCreator(
             context.getCoinbase(),
             header -> context.getExtraData(),
             context.getTransactionPool().getPendingTransactions(),
             protocolContext,
             protocolSchedule,
-            Functions.identity(),
+            GasLimitCalculator.constant(),
             context.getEthHashSolver(),
             Wei.ZERO,
             0.0,

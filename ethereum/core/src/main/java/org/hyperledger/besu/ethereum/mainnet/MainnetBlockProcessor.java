@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.mainnet;
 
 import org.hyperledger.besu.ethereum.core.Address;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.GoQuorumPrivacyParameters;
 import org.hyperledger.besu.ethereum.core.MutableAccount;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.core.Wei;
@@ -23,6 +24,7 @@ import org.hyperledger.besu.ethereum.core.WorldUpdater;
 import org.hyperledger.besu.ethereum.core.fees.TransactionGasBudgetCalculator;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -32,12 +34,13 @@ public class MainnetBlockProcessor extends AbstractBlockProcessor {
   private static final Logger LOG = LogManager.getLogger();
 
   public MainnetBlockProcessor(
-      final TransactionProcessor transactionProcessor,
+      final MainnetTransactionProcessor transactionProcessor,
       final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory,
       final Wei blockReward,
       final MiningBeneficiaryCalculator miningBeneficiaryCalculator,
       final boolean skipZeroBlockRewards,
-      final TransactionGasBudgetCalculator gasBudgetCalculator) {
+      final TransactionGasBudgetCalculator gasBudgetCalculator,
+      final Optional<GoQuorumPrivacyParameters> goQuorumPrivacyParameters) {
     super(
         transactionProcessor,
         transactionReceiptFactory,
@@ -48,7 +51,7 @@ public class MainnetBlockProcessor extends AbstractBlockProcessor {
   }
 
   @Override
-  boolean rewardCoinbase(
+  protected boolean rewardCoinbase(
       final MutableWorldState worldState,
       final BlockHeader header,
       final List<BlockHeader> ommers,
@@ -66,11 +69,11 @@ public class MainnetBlockProcessor extends AbstractBlockProcessor {
     miningBeneficiaryAccount.incrementBalance(coinbaseReward);
     for (final BlockHeader ommerHeader : ommers) {
       if (ommerHeader.getNumber() - header.getNumber() > MAX_GENERATION) {
-        LOG.warn(
-            "Block processing error: ommer block number {} more than {} generations current block number {}",
+        LOG.info(
+            "Block processing error: ommer block number {} more than {} generations. Block {}",
             ommerHeader.getNumber(),
             MAX_GENERATION,
-            header.getNumber());
+            header.getHash().toHexString());
         return false;
       }
 

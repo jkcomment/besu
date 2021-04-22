@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApi;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis;
 import org.hyperledger.besu.ethereum.core.Address;
+import org.hyperledger.besu.ethereum.p2p.peers.EnodeURL;
 import org.hyperledger.besu.ethereum.permissioning.AllowlistPersistor;
 import org.hyperledger.besu.ethereum.permissioning.AllowlistPersistor.ALLOWLIST_TYPE;
 import org.hyperledger.besu.ethereum.permissioning.LocalPermissioningConfiguration;
@@ -66,11 +67,13 @@ public class PermissionedNodeBuilder {
 
   private boolean nodeSmartContractPermissioningEnabled = false;
   private String nodePermissioningSmartContractAddress = null;
+  private int nodePermissioningSmartContractInterfaceVersion = 1;
 
   private boolean accountSmartContractPermissioningEnabled = false;
   private String accountPermissioningSmartContractAddress = null;
 
   private List<String> staticNodes = new ArrayList<>();
+  private boolean isDnsEnabled = false;
   private boolean mining = true;
 
   public PermissionedNodeBuilder name(final String name) {
@@ -128,6 +131,13 @@ public class PermissionedNodeBuilder {
     return this;
   }
 
+  public PermissionedNodeBuilder nodesContractV2Enabled(final String address) {
+    this.nodeSmartContractPermissioningEnabled = true;
+    this.nodePermissioningSmartContractAddress = address;
+    this.nodePermissioningSmartContractInterfaceVersion = 2;
+    return this;
+  }
+
   public PermissionedNodeBuilder accountsContractEnabled(final String address) {
     this.accountSmartContractPermissioningEnabled = true;
     this.accountPermissioningSmartContractAddress = address;
@@ -136,6 +146,11 @@ public class PermissionedNodeBuilder {
 
   public PermissionedNodeBuilder staticNodes(final List<String> staticNodes) {
     this.staticNodes = staticNodes;
+    return this;
+  }
+
+  public PermissionedNodeBuilder dnsEnabled(final boolean isDnsEnabled) {
+    this.isDnsEnabled = isDnsEnabled;
     return this;
   }
 
@@ -171,7 +186,7 @@ public class PermissionedNodeBuilder {
     }
 
     final PermissioningConfiguration permissioningConfiguration =
-        new PermissioningConfiguration(localPermConfig, smartContractPermConfig);
+        new PermissioningConfiguration(localPermConfig, smartContractPermConfig, Optional.empty());
 
     final BesuNodeConfigurationBuilder builder = new BesuNodeConfigurationBuilder();
     builder
@@ -187,6 +202,8 @@ public class PermissionedNodeBuilder {
     if (!staticNodes.isEmpty()) {
       builder.staticNodes(staticNodes);
     }
+
+    builder.dnsEnabled(isDnsEnabled);
 
     if (genesisFile != null) {
       builder.genesisConfigProvider((a) -> Optional.of(genesisFile));
@@ -209,12 +226,15 @@ public class PermissionedNodeBuilder {
         localConfigNodesPermissioningFile = createTemporaryPermissionsFile();
       }
 
-      List<String> nodesAsListOfStrings =
-          localConfigPermittedNodes.stream().map(URI::toASCIIString).collect(Collectors.toList());
-      initPermissioningConfigurationFile(
-          ALLOWLIST_TYPE.NODES, nodesAsListOfStrings, localConfigNodesPermissioningFile);
+      final List<EnodeURL> nodeAllowList =
+          localConfigPermittedNodes.stream().map(EnodeURL::fromURI).collect(Collectors.toList());
 
-      localPermissioningConfiguration.setNodeAllowlist(localConfigPermittedNodes);
+      initPermissioningConfigurationFile(
+          ALLOWLIST_TYPE.NODES,
+          nodeAllowList.stream().map(EnodeURL::toString).collect(Collectors.toList()),
+          localConfigNodesPermissioningFile);
+
+      localPermissioningConfiguration.setNodeAllowlist(nodeAllowList);
       localPermissioningConfiguration.setNodePermissioningConfigFilePath(
           localConfigNodesPermissioningFile.toAbsolutePath().toString());
     }
@@ -251,6 +271,8 @@ public class PermissionedNodeBuilder {
           Address.fromHexString(accountPermissioningSmartContractAddress));
       config.setSmartContractAccountAllowlistEnabled(true);
     }
+
+    config.setNodeSmartContractInterfaceVersion(nodePermissioningSmartContractInterfaceVersion);
 
     return config;
   }

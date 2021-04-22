@@ -33,6 +33,7 @@ dependencies {
   implementation project(':consensus:common')
   implementation project(':consensus:ibft')
   implementation project(':consensus:ibftlegacy')
+  implementation project(':consensus:qbft')
   implementation project(':crypto')
   implementation project(':enclave')
   implementation project(':ethereum:api')
@@ -43,7 +44,9 @@ dependencies {
   implementation project(':ethereum:permissioning')
   implementation project(':ethereum:retesteth')
   implementation project(':ethereum:rlp')
+  implementation project(':ethereum:trie')
   implementation project(':ethereum:stratum')
+  implementation project(':ethereum:ethstats')
   implementation project(':metrics:core')
   implementation project(':nat')
   implementation project(':plugin-api')
@@ -59,24 +62,30 @@ dependencies {
   implementation 'io.vertx:vertx-web'
   implementation 'org.apache.logging.log4j:log4j-api'
   implementation 'org.apache.logging.log4j:log4j-core'
-  implementation 'org.apache.tuweni:tuweni-bytes'
-  implementation 'org.apache.tuweni:tuweni-config'
-  implementation 'org.apache.tuweni:tuweni-units'
+  implementation 'org.apache.tuweni:bytes'
+  implementation 'org.apache.tuweni:config'
+  implementation 'org.apache.tuweni:toml'
+  implementation 'org.apache.tuweni:units'
   implementation 'org.springframework.security:spring-security-crypto'
+  implementation 'org.xerial.snappy:snappy-java'
+  implementation 'net.consensys.services:quorum-mainnet-launcher'
 
   runtimeOnly 'org.apache.logging.log4j:log4j-slf4j-impl'
+  runtimeOnly 'org.apache.logging.log4j:log4j-jul'
   runtimeOnly 'com.splunk.logging:splunk-library-javalogging'
+  runtimeOnly 'org.fusesource.jansi:jansi' // for color logging in windows
 
   testImplementation project(path: ':ethereum:core', configuration: 'testSupportArtifacts')
   testImplementation project(path: ':crypto', configuration: 'testSupportArtifacts')
   testImplementation project(':testutil')
 
+  testImplementation 'tech.pegasys.discovery:discovery'
   testImplementation 'com.google.auto.service:auto-service'
   testImplementation 'com.squareup.okhttp3:okhttp'
   testImplementation 'junit:junit'
   testImplementation 'org.apache.commons:commons-text'
-  testImplementation 'org.apache.tuweni:tuweni-bytes'
-  testImplementation 'org.apache.tuweni:tuweni-units'
+  testImplementation 'org.apache.tuweni:bytes'
+  testImplementation 'org.apache.tuweni:units'
   testImplementation 'org.assertj:assertj-core'
   testImplementation 'org.awaitility:awaitility'
   testImplementation 'org.mockito:mockito-core'

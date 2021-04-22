@@ -14,7 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.privacy;
 
-import org.hyperledger.besu.crypto.SECP256K1;
+import org.hyperledger.besu.crypto.SECPSignature;
+import org.hyperledger.besu.crypto.SignatureAlgorithm;
+import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.Account;
 import org.hyperledger.besu.ethereum.core.Address;
@@ -26,6 +28,7 @@ import org.hyperledger.besu.ethereum.core.Wei;
 import org.hyperledger.besu.ethereum.debug.TraceOptions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
+import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.transaction.CallParameter;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.ethereum.vm.DebugOperationTracer;
@@ -33,6 +36,8 @@ import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 
 import java.util.Optional;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -44,12 +49,19 @@ import org.apache.tuweni.bytes.Bytes32;
  */
 public class PrivateTransactionSimulator {
 
-  // Dummy signature for transactions to not fail being processed.
-  private static final SECP256K1.Signature FAKE_SIGNATURE =
-      SECP256K1.Signature.create(SECP256K1.HALF_CURVE_ORDER, SECP256K1.HALF_CURVE_ORDER, (byte) 0);
+  private static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
+      Suppliers.memoize(SignatureAlgorithmFactory::getInstance);
 
-  private static final Address DEFAULT_FROM =
-      Address.fromHexString("0x0000000000000000000000000000000000000000");
+  // Dummy signature for transactions to not fail being processed.
+  private static final SECPSignature FAKE_SIGNATURE =
+      SIGNATURE_ALGORITHM
+          .get()
+          .createSignature(
+              SIGNATURE_ALGORITHM.get().getHalfCurveOrder(),
+              SIGNATURE_ALGORITHM.get().getHalfCurveOrder(),
+              (byte) 0);
+
+  private static final Address DEFAULT_FROM = Address.ZERO;
 
   private final Blockchain blockchain;
   private final WorldStateArchive worldStateArchive;
@@ -69,32 +81,32 @@ public class PrivateTransactionSimulator {
     this.privateStateRootResolver = privacyParameters.getPrivateStateRootResolver();
   }
 
-  public Optional<PrivateTransactionProcessor.Result> process(
+  public Optional<TransactionProcessingResult> process(
       final String privacyGroupId, final CallParameter callParams) {
     final BlockHeader header = blockchain.getChainHeadHeader();
     return process(privacyGroupId, callParams, header);
   }
 
-  public Optional<PrivateTransactionProcessor.Result> process(
+  public Optional<TransactionProcessingResult> process(
       final String privacyGroupId, final CallParameter callParams, final Hash blockHeaderHash) {
     final BlockHeader header = blockchain.getBlockHeader(blockHeaderHash).orElse(null);
     return process(privacyGroupId, callParams, header);
   }
 
-  public Optional<PrivateTransactionProcessor.Result> process(
+  public Optional<TransactionProcessingResult> process(
       final String privacyGroupId, final CallParameter callParams, final long blockNumber) {
     final BlockHeader header = blockchain.getBlockHeader(blockNumber).orElse(null);
     return process(privacyGroupId, callParams, header);
   }
 
-  private Optional<PrivateTransactionProcessor.Result> process(
+  private Optional<TransactionProcessingResult> process(
       final String privacyGroupIdString, final CallParameter callParams, final BlockHeader header) {
     if (header == null) {
       return Optional.empty();
     }
 
     final MutableWorldState publicWorldState =
-        worldStateArchive.getMutable(header.getStateRoot()).orElse(null);
+        worldStateArchive.getMutable(header.getStateRoot(), header.getHash()).orElse(null);
     if (publicWorldState == null) {
       return Optional.empty();
     }
@@ -105,7 +117,10 @@ public class PrivateTransactionSimulator {
         privateStateRootResolver.resolveLastStateRoot(privacyGroupId, header.getHash());
 
     final MutableWorldState disposablePrivateState =
-        privacyParameters.getPrivateWorldStateArchive().getMutable(lastRootHash).get();
+        privacyParameters
+            .getPrivateWorldStateArchive()
+            .getMutable(lastRootHash, header.getHash())
+            .get();
 
     final PrivateTransaction transaction =
         getPrivateTransaction(callParams, header, privacyGroupId, disposablePrivateState);
@@ -115,7 +130,7 @@ public class PrivateTransactionSimulator {
     final PrivateTransactionProcessor privateTransactionProcessor =
         protocolSpec.getPrivateTransactionProcessor();
 
-    final PrivateTransactionProcessor.Result result =
+    final TransactionProcessingResult result =
         privateTransactionProcessor.processTransaction(
             blockchain,
             publicWorldState.updater(),

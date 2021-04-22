@@ -15,7 +15,6 @@
 package org.hyperledger.besu.config;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.hyperledger.besu.config.JsonUtil.normalizeKeys;
 
 import java.io.IOException;
@@ -63,6 +62,15 @@ public class GenesisConfigFile {
     try {
       return fromConfig(
           Resources.toString(GenesisConfigFile.class.getResource("/dev.json"), UTF_8));
+    } catch (final IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public static GenesisConfigFile ecip1049dev() {
+    try {
+      return fromConfig(
+          Resources.toString(GenesisConfigFile.class.getResource("/ecip1049_dev.json"), UTF_8));
     } catch (final IOException e) {
       throw new IllegalStateException(e);
     }
@@ -129,21 +137,6 @@ public class GenesisConfigFile {
     return parseLong("timestamp", JsonUtil.getValueAsString(configRoot, "timestamp", "0x0"));
   }
 
-  public List<Long> getForks() {
-    return JsonUtil.getObjectNode(configRoot, "config").stream()
-        .flatMap(
-            node ->
-                Streams.stream(node.fieldNames())
-                    .map(String::toLowerCase)
-                    .filter(name -> !name.equals("chainid"))
-                    .filter(name -> node.get(name).canConvertToLong())
-                    .filter(name -> name.contains("block"))
-                    .filter(name -> !name.equals("classicforkblock"))
-                    .map(name -> node.get(name).asLong()))
-        .sorted()
-        .collect(toUnmodifiableList());
-  }
-
   private String getRequiredString(final String key) {
     if (!configRoot.has(key)) {
       throw new IllegalArgumentException(
@@ -163,5 +156,9 @@ public class GenesisConfigFile {
               + value
               + "'");
     }
+  }
+
+  public List<Long> getForks() {
+    return getConfigOptions().getForks();
   }
 }

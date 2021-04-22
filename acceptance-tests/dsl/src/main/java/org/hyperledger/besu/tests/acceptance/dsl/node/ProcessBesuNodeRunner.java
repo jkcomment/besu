@@ -17,7 +17,7 @@ package org.hyperledger.besu.tests.acceptance.dsl.node;
 import static com.google.common.base.Preconditions.checkState;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import org.hyperledger.besu.cli.options.NetworkingOptions;
+import org.hyperledger.besu.cli.options.unstable.NetworkingOptions;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApi;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis;
 import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
@@ -26,9 +26,11 @@ import org.hyperledger.besu.plugin.services.metrics.MetricCategory;
 import org.hyperledger.besu.tests.acceptance.dsl.StaticNodesUtils;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.lang.ProcessBuilder.Redirect;
 import java.net.URI;
 import java.nio.file.Files;
@@ -57,6 +59,9 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
 
   private final Map<String, Process> besuProcesses = new HashMap<>();
   private final ExecutorService outputProcessorExecutor = Executors.newCachedThreadPool();
+  private boolean capturingConsole;
+  private final ByteArrayOutputStream consoleContents = new ByteArrayOutputStream();
+  private final PrintStream consoleOut = new PrintStream(consoleContents);
 
   ProcessBesuNodeRunner() {
     Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
@@ -73,11 +78,12 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
     params.add("--data-path");
     params.add(dataDir.toAbsolutePath().toString());
 
-    node.getRunCommand().ifPresent(params::add);
-
     if (node.isDevMode()) {
       params.add("--network");
       params.add("DEV");
+    } else if (node.getNetwork() != null) {
+      params.add("--network");
+      params.add(node.getNetwork().name());
     }
 
     params.add("--sync-mode");
@@ -122,8 +128,6 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
         params.add("--privacy-public-key-file");
         params.add(node.getPrivacyParameters().getEnclavePublicKeyFile().getAbsolutePath());
       }
-      params.add("--privacy-precompiled-address");
-      params.add(String.valueOf(node.getPrivacyParameters().getPrivacyAddress()));
       params.add("--privacy-marker-transaction-signing-key-file");
       params.add(node.homeDirectory().resolve("key").toString());
 
@@ -140,6 +144,13 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
 
     if (node.hasStaticNodes()) {
       createStaticNodes(node);
+    }
+
+    if (node.isDnsEnabled()) {
+      params.add("--Xdns-enabled");
+      params.add("true");
+      params.add("--Xdns-update-enabled");
+      params.add("true");
     }
 
     if (node.isJsonRpcEnabled()) {
@@ -195,6 +206,10 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
       for (final MetricCategory category : metricsConfiguration.getMetricCategories()) {
         params.add("--metrics-category");
         params.add(((Enum<?>) category).name());
+      }
+      if (node.isMetricsEnabled() || metricsConfiguration.isPushEnabled()) {
+        params.add("--metrics-protocol");
+        params.add(metricsConfiguration.getProtocol().name());
       }
       if (metricsConfiguration.isPushEnabled()) {
         params.add("--metrics-push-enabled");
@@ -271,6 +286,10 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
                 params.add("--permissions-accounts-contract-address");
                 params.add(permissioningConfiguration.getAccountSmartContractAddress().toString());
               }
+              params.add("--permissions-nodes-contract-version");
+              params.add(
+                  String.valueOf(
+                      permissioningConfiguration.getNodeSmartContractInterfaceVersion()));
             });
     params.addAll(node.getExtraCLIOptions());
 
@@ -284,6 +303,8 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
     if (level != null) {
       params.add("--logging=" + level);
     }
+
+    params.addAll(node.getRunCommand());
 
     LOG.info("Creating besu process with params {}", params);
     final ProcessBuilder processBuilder =
@@ -341,6 +362,9 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
       while (line != null) {
         // would be nice to pass up the log level of the incoming log line
         PROCESS_LOG.info(line);
+        if (capturingConsole) {
+          consoleOut.println(line);
+        }
         line = in.readLine();
       }
     } catch (final IOException e) {
@@ -405,14 +429,15 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
   private void killBesuProcess(final String name) {
     final Process process = besuProcesses.remove(name);
     if (process == null) {
-      LOG.error("Process {} wasn't in our list", name);
+      LOG.error("Process {} wasn't in our list, pid {}", name, process.pid());
+      return;
     }
     if (!process.isAlive()) {
-      LOG.info("Process {} already exited", name);
+      LOG.info("Process {} already exited, pid {}", name, process.pid());
       return;
     }
 
-    LOG.info("Killing {} process", name);
+    LOG.info("Killing {} process, pid {}", name, process.pid());
 
     process.destroy();
     try {
@@ -422,7 +447,7 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
     }
 
     if (process.isAlive()) {
-      LOG.warn("Process {} still alive, destroying forcibly now", name);
+      LOG.warn("Process {} still alive, destroying forcibly now, pid {}", name, process.pid());
       try {
         process.destroyForcibly().waitFor(30, TimeUnit.SECONDS);
       } catch (final Exception e) {
@@ -430,5 +455,17 @@ public class ProcessBesuNodeRunner implements BesuNodeRunner {
       }
       LOG.info("Process exited with code {}", process.exitValue());
     }
+  }
+
+  @Override
+  public void startConsoleCapture() {
+    consoleContents.reset();
+    capturingConsole = true;
+  }
+
+  @Override
+  public String getConsoleContents() {
+    capturingConsole = false;
+    return consoleContents.toString(UTF_8);
   }
 }
